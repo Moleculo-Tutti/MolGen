@@ -1,4 +1,5 @@
 import torch
+import torch_geometric
 import random
 from torch_geometric.utils import to_undirected, subgraph
 from torch_geometric.data import Data
@@ -54,6 +55,7 @@ def smiles_to_torch_geometric(smiles):
     return data
 
 
+
 def torch_geometric_to_networkx(data):
     """
     Convert a torch_geometric.data.Data object into a networkx.Graph object.
@@ -64,15 +66,24 @@ def torch_geometric_to_networkx(data):
     Returns:
     G (networkx.Graph): A NetworkX Graph object representing the molecule.
     """
-    G = to_networkx(data, node_attrs=['x'], edge_attrs=['edge_attr'])
-    
-    # Handle the case where 'x' attribute is a float, not a tensor
+    # Modify node features to take the argmax, excluding the last element
+
+    copy_data = data.clone()
+    if copy_data.x.shape[1] > 1:
+        copy_data.x = torch.argmax(copy_data.x[:, :-1], dim=1).unsqueeze(1)
+
+    # Modify edge features to take the argmax
+    if copy_data.edge_attr.shape[1] > 1:
+        copy_data.edge_attr = torch.argmax(copy_data.edge_attr, dim=1).unsqueeze(1)
+
+    G = to_networkx(copy_data, node_attrs=['x'], edge_attrs=['edge_attr'])
+
     for i in G.nodes:
         x_attr = G.nodes[i]['x']
         atomic_num = int(x_attr.item()) if hasattr(x_attr, 'item') else int(x_attr)
         G.nodes[i]['atomic_num'] = atomic_num
         del G.nodes[i]['x']
-    
+
     for i, j in G.edges:
         edge_attr = G.edges[i, j]['edge_attr']
         bond_type = edge_attr.item() if hasattr(edge_attr, 'item') else edge_attr
@@ -81,9 +92,7 @@ def torch_geometric_to_networkx(data):
 
     return G
 
-
-
-def plot_graph(G, show_atom_ids=True, show_atom_types=True, show_edge_types=True, id_map=None):
+def plot_graph(G, show_atom_ids=True, show_atom_types=True, show_edge_types=True, id_map=None, atom_conversion_type='classic', encoding_type = None):
     """
     Plot a NetworkX graph with atom IDs and/or atom types as labels and edge types.
 
@@ -97,7 +106,13 @@ def plot_graph(G, show_atom_ids=True, show_atom_types=True, show_edge_types=True
     pos = nx.spring_layout(G, seed=42)
     nx.draw(G, pos, with_labels=False, node_size=500)
 
-    conversion_atom_num_to_symbol = {1: 'H', 6: 'C', 7: 'N', 8: 'O', 9: 'F', 16: 'S', 35: 'Br', 53: 'I'}
+    if atom_conversion_type == 'classic':
+        conversion_atom_num_to_symbol = {1: 'H', 6: 'C', 7: 'N', 8: 'O', 9: 'F', 16: 'S', 35: 'Br', 53: 'I'}
+    elif atom_conversion_type == 'onehot':
+        if encoding_type == 'all':
+            conversion_atom_num_to_symbol = {0: 'C', 1: 'N', 2: 'O', 3: 'F', 4: 'P', 5: 'S', 6: 'Cl', 7: 'Br', 8: 'I'}
+        elif encoding_type == 'reduced':
+            conversion_atom_num_to_symbol = {0: 'C', 1: 'N', 2: 'O', 3: 'F', 4: 'S', 5: 'Cl'}
 
     # Prepare node labels
     labels = {}
@@ -111,6 +126,7 @@ def plot_graph(G, show_atom_ids=True, show_atom_types=True, show_edge_types=True
             if show_atom_ids:
                 label += ":"
             label += conversion_atom_num_to_symbol[data['atomic_num']]
+
         labels[node] = label
 
     nx.draw_networkx_labels(G, pos, labels, font_size=12, font_weight='bold')
@@ -231,13 +247,23 @@ def get_subgraph_with_terminal_nodes(data, num_atoms):
     return subgraph_data, terminal_node_info, id_map
 
 
-def node_encoder(atom_num : float) -> torch.Tensor:
+def node_encoder(atom_num : float, encoding_option = 'all') -> torch.Tensor:
     """
     Encode the atom number into a one-hot vector.
     """
-    atom_mapping = {6: 0, 7: 1, 8: 2, 9: 3, 15: 4, 16: 5, 17: 6, 35: 7, 53: 8}
+    #Verify that encoding_option is among the allowed values
+    if encoding_option not in ['all', 'reduced']:
+        raise ValueError("encoding_option must be either 'all' or 'reduced'.")
+    
+    if encoding_option == 'all':
+        atom_mapping = {6: 0, 7: 1, 8: 2, 9: 3, 15: 4, 16: 5, 17: 6, 35: 7, 53: 8}
+        size = 9
+    elif encoding_option == 'reduced':
+        atom_mapping = {6: 0, 7: 1, 8: 2, 9: 3, 16: 4, 17: 5}
+        size = 6
+
     # Initialize the one-hot vector
-    one_hot = torch.zeros(10)
+    one_hot = torch.zeros(size + 1)
 
     # Encode the atom number
     if int(atom_num) in atom_mapping:
@@ -263,12 +289,39 @@ def edge_encoder(bond_type : float) -> torch.Tensor:
     
     return one_hot
 
+def process_encode_graph(smiles, encoding_option = 'all') -> torch_geometric.data.Data:
 
+    """
+    Take a SMILES string and encode it into a torch_geometric.data.Data object.
+    One hot encode the node and edge features.
+
+    Args:
+    smiles (str): SMILES string of the molecule.
+    encoding_option (str): Option for which dataset to use. Must be either 'all' or 'reduced'. Used in node_encoder.
+    """
+
+    data = smiles_to_torch_geometric(smiles)
+
+    node_features = data.x
+    edge_attr = data.edge_attr
+
+    #encode the node features with the function node encoder one atom at a time
+    node_features = torch.stack([node_encoder(atom, encoding_option) for atom in node_features])
+    
+    #encore the edge features with the function edge encoder one bond at a time
+    edge_attr = torch.stack([edge_encoder(bond) for bond in edge_attr])
+
+    #create new data object with the encoded node and edge features
+
+    encoded_data = Data(x=node_features, edge_attr=edge_attr, edge_index=data.edge_index)
+
+    return encoded_data
 
 
 def encode_graph_data(graph, terminal_node_info, node_encoder, edge_encoder):
     """
     Encode the graph data into a format that can be used by the neural network.
+    DEPRECATED I THINK
     """
 
     # Encode the node features
