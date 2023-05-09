@@ -56,6 +56,14 @@ class ZincSubgraphDataset(Dataset):
         return subgraph
     
 
+def custom_collate(batch):
+    sg_data_list = [item for item in batch]
+    terminal_nodes_info_list = [item.y for item in batch]
+
+    sg_data_batch = Batch.from_data_list(sg_data_list)
+    terminal_nodes_info_tensor = torch.stack(terminal_nodes_info_list, dim=0)
+    return sg_data_batch, terminal_nodes_info_tensor
+
 def custom_collate_GNN1(batch):
     sg_data_list = [item for item in batch]
     terminal_nodes_info_list = [item.y for item in batch]
