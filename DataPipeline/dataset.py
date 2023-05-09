@@ -47,11 +47,16 @@ class ZincSubgraphDataset(Dataset):
             label_gnn1 += torch.tensor([0] * (self.encoding_size - 1) + [1])
 
         subgraph.y = label_gnn1
+        
+        id_chosen = np.random.randint(len(terminal_nodes[1]))
+        subgraph.neighbor = terminal_nodes[1][id_chosen][1]
+
+        subgraph.edge_neighbor = terminal_nodes[1][id_chosen][2]
 
         return subgraph
     
 
-def custom_collate(batch):
+def custom_collate_GNN1(batch):
     sg_data_list = [item for item in batch]
     terminal_nodes_info_list = [item.y for item in batch]
 
@@ -59,6 +64,13 @@ def custom_collate(batch):
     terminal_nodes_info_tensor = torch.stack(terminal_nodes_info_list, dim=0)
     return sg_data_batch, terminal_nodes_info_tensor
 
+def custom_collate_GNN2(batch):
+    sg_data_list = [item for item in batch]
+    terminal_nodes_info_list = [item.edge_neighbor for item in batch]
+
+    sg_data_batch = Batch.from_data_list(sg_data_list)
+    terminal_nodes_info_tensor = torch.stack(terminal_nodes_info_list, dim=0)
+    return sg_data_batch, terminal_nodes_info_tensor
 
 def load_compressed_batch(file_path):
     with open(file_path, 'rb') as f:
