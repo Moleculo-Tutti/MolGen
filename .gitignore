@@ -1,0 +1,9 @@
+# Ignorer tous les fichiers
+*
+
+# Ne pas ignorer les dossiers
+!*/
+
+# Autoriser les fichiers .py et .ipynb
+!*.py
+!*.ipynb
