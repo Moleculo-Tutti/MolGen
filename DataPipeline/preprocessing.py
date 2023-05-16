@@ -168,7 +168,8 @@ def get_subgraph(data, indices, id_map):
 
     # Relabel the edge indices according to the new node indices
     subgraph_edge_index = torch.tensor([[index_map[src], index_map[tgt]] for src, tgt in subgraph_edge_index.t().tolist()]).t()
-
+    #force the edge index to be int64
+    subgraph_edge_index = subgraph_edge_index.type(torch.int64)
     # Extract corresponding edge attributes
     subgraph_edge_attr = data.edge_attr[mask]
 
@@ -227,6 +228,8 @@ def get_subgraph_with_terminal_nodes(data, num_atoms):
     external_neighbors = []
     oldest_non_completed = min([i for i in neighbors if i in visited], key = lambda x:id_map[x])
     neighbors_oldest_non_completed = data.edge_index[:, data.edge_index[0] == oldest_non_completed][1].tolist()
+
+        
     for neighbor in neighbors_oldest_non_completed:
         if neighbor not in visited:
             edge_attr_idx = (data.edge_index[0] == oldest_non_completed) & (data.edge_index[1] == neighbor)
@@ -246,7 +249,101 @@ def get_subgraph_with_terminal_nodes(data, num_atoms):
 
     return subgraph_data, terminal_node_info, id_map
 
+def get_subgraph_with_terminal_nodes_step(data, num_steps, impose_edges=False):
+    """
+    Get a subgraph of a torch_geometric graph molecule based on specific rules.
 
+    Args:
+    data (torch_geometric.data.Data): A PyTorch Geometric Data object representing the molecule.
+    num_atoms (int): Desired number of atoms in the subgraph.
+
+    Returns:
+    subgraph_data (torch_geometric.data.Data): Subgraph of the torch_geometric graph molecule.
+    """
+    if impose_edges == False:
+        if num_steps < 1 or num_steps > data.num_nodes*2:
+            raise ValueError("num_atoms must be between 1 and 2 times the number of nodes in the graph.")
+    if impose_edges == True:
+        if num_steps < 1 or num_steps > data.num_nodes:
+            raise ValueError("num_atoms must be between 1 and the number of nodes in the graph.")
+
+    # Randomly select an atom
+    start_atom = random.choice(range(data.num_nodes))
+
+    queue = [start_atom]
+    subgraph_atoms = [start_atom]
+    count_num_steps = 1
+    visited = set()
+
+    id_map = {}
+    new_id = 0
+
+    id_map[start_atom] = new_id
+    new_id += 1
+
+    # Breadth search 
+
+    while queue or count_num_steps <= num_steps:
+
+        current = queue.pop(0)
+
+        # Add neighbors to the queue
+        neighbors = data.edge_index[:, data.edge_index[0] == current][1].tolist()
+        #reduce nighbors list not in subgraph 
+        neighbors = [i for i in neighbors if i not in subgraph_atoms]
+        random.shuffle(neighbors)
+
+        if len(neighbors) + count_num_steps >= num_steps:
+            predicted = neighbors[:num_steps - count_num_steps]
+            for neighbor in neighbors[num_steps - count_num_steps:]:
+                id_map[neighbor] = new_id
+                new_id += 1
+                subgraph_atoms.append(neighbor)
+            external_neighbors = []
+            for neighbor in predicted:
+                #get edge attributes
+                edge_attr_idx = (data.edge_index[0] == current) & (data.edge_index[1] == neighbor)
+                edge_data = data.edge_attr[edge_attr_idx][0]
+                #get external neighbors
+                external_neighbors_edges = []
+                for neighbor2 in data.edge_index[:, data.edge_index[0] == neighbor][1].tolist():
+                    if neighbor2 in subgraph_atoms and neighbor2 != current:
+                        # Get the index of the edge attribute
+                        edge_attr_idx = (data.edge_index[0] == neighbor) & (data.edge_index[1] == neighbor2)
+                        # Get the edge attribute
+                        edge_attr = data.edge_attr[edge_attr_idx][0]
+                        external_neighbors_edges.append((neighbor2, edge_attr))
+                external_neighbors.append((neighbor, data.x[neighbor], edge_data, external_neighbors_edges))
+            
+            terminal_node_infos = (current, external_neighbors)
+            subgraph_indices = torch.tensor(list(subgraph_atoms), dtype=torch.long)
+            subgraph_data = get_subgraph(data, subgraph_indices, id_map)
+            return subgraph_data, terminal_node_infos, id_map
+
+
+        for neighbor in neighbors:
+            queue.append(neighbor)
+            subgraph_atoms.append(neighbor)
+            id_map[neighbor] = new_id
+            new_id += 1
+            count_num_steps += 1   
+
+        visited.add(current)
+        if impose_edges == False:
+            #For the edges prediction we only count the number of atoms added
+            count_num_steps += 1
+
+        # Stop if we've reached the desired number of steps
+        if count_num_steps == num_steps:
+            # we predict a stop in terminal_node_infos
+            terminal_node_infos = (current, [])
+            subgraph_indices = torch.tensor(list(subgraph_atoms), dtype=torch.long)
+            subgraph_data = get_subgraph(data, subgraph_indices, id_map)
+            return subgraph_data, terminal_node_infos, id_map
+
+    raise ValueError("The number of steps is too high for the graph.")    
+
+    
 def node_encoder(atom_num : float, encoding_option = 'all') -> torch.Tensor:
     """
     Encode the atom number into a one-hot vector.
