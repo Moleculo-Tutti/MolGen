@@ -35,7 +35,7 @@ def add_node_feature_based_on_position(data):
         
         # end_index is the cumulative sum of node counts up to the current graph
         end_index = cumsum_node_counts[i]
-        
+
         # Find the index of the 'current_atom' within this graph
         current_atom_index = current_atom_indices[(current_atom_indices >= start_index) & (current_atom_indices < end_index)][0]
 
