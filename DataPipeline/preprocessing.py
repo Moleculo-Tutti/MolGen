@@ -332,7 +332,7 @@ def get_subgraph_with_terminal_nodes_step(data, num_steps, impose_edges=False):
             count_num_steps += 1 
 
         # Stop if we've reached the desired number of steps
-        if count_num_steps >= num_steps:
+        if count_num_steps >= num_steps and impose_edges == False:
             # we predict a stop in terminal_node_infos
             terminal_node_infos = (current, [])
             subgraph_indices = torch.tensor(list(subgraph_atoms), dtype=torch.long)
