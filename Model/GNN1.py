@@ -89,4 +89,4 @@ class ModelWithEdgeFeatures(torch.nn.Module):
             x = F.dropout(x, training=self.training)
         x = self.fc2(x)
 
-        return F.softmax(x, dim=1)
+        return x

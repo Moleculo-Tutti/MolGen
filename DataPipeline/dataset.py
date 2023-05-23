@@ -47,7 +47,6 @@ def add_node_feature_based_on_position(data):
 
     return data
 
-
 class ZincSubgraphDataset(Dataset):
 
     def __init__(self, data_path):
@@ -112,9 +111,9 @@ class ZincSubgraphDatasetStep(Dataset):
    
         mol_size = len(preprocessed_graph.x)
         if self.GNN_type == 1:
-            num_steps = random.choice(range(3, 2*mol_size + 1))
+            num_steps = random.choice(range(1, 2*mol_size))
         if self.GNN_type >= 2:
-            num_steps = random.choice(range(3, mol_size + 1))
+            num_steps = random.choice(range(1, mol_size))
         subgraph, terminal_nodes, id_map = get_subgraph_with_terminal_nodes_step(preprocessed_graph, num_steps, impose_edges=self.impose_edges)
         subgraph.x[id_map[terminal_nodes[0]]][self.encoding_size - 1] = 1
 
@@ -153,15 +152,21 @@ class ZincSubgraphDatasetStep(Dataset):
 
 
             node_features_label = torch.zeros(len(subgraph.x), 5)
-        
+
+            # put ones in the last column of the node_features_label for the terminal node
+            node_features_label[:, -1] = 1
 
             if len(terminal_nodes[1][id_chosen][3]) != 0:
-                cycle_edge_features = [cycle_neighbor[1] for cycle_neighbor in terminal_nodes[1][id_chosen][3]]
-            
-            else:
-                cycle_edge_features = []
-            #subgraph.cycle_edge_features = cycle_edge_features_tensor
-            return subgraph, cycle_edge_features
+                for cycle_neighbor in terminal_nodes[1][id_chosen][3]:
+                    node_features_label[id_map[cycle_neighbor[0]]][:4] = cycle_neighbor[1]
+                    node_features_label[id_map[cycle_neighbor[0]]][-1] = 0
+
+            mask = torch.cat((torch.zeros(node1 + 1), torch.ones(len(subgraph.x) - node1 - 1)), dim=0).bool()
+
+            subgraph.cycle_label = node_features_label
+            subgraph.mask = mask
+            subgraph.terminal_node_info = terminal_nodes
+
 
         return subgraph
 
@@ -202,12 +207,15 @@ def custom_collate_GNN2(batch):
 
 def custom_collate_GNN3(batch):
 
-    sg_data_list = [item[0] for item in batch]
-    terminal_nodes_info_list = [item[1] for item in batch]
+    sg_data_list = [item for item in batch]
+    cycle_label_list = [item.cycle_label for item in batch]
+    mask_list = [item.mask for item in batch]
 
     sg_data_batch = Batch.from_data_list(sg_data_list)
+    cycle_label_tensor = torch.cat(cycle_label_list, dim=0)
+    mask_tensor = torch.cat(mask_list, dim=0)
     
-    return sg_data_batch, terminal_nodes_info_list
+    return sg_data_batch, cycle_label_tensor, mask_tensor
 
 def load_compressed_batch(file_path):
     with open(file_path, 'rb') as f:

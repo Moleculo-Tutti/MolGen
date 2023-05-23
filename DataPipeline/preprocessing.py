@@ -261,7 +261,7 @@ def get_subgraph_with_terminal_nodes_step(data, num_steps, impose_edges=False):
     subgraph_data (torch_geometric.data.Data): Subgraph of the torch_geometric graph molecule.
     """
     if impose_edges == False:
-        if num_steps < 1 or num_steps > data.num_nodes*2:
+        if num_steps < 1 or num_steps >= data.num_nodes*2:
             raise ValueError("num_atoms must be between 1 and 2 times the number of nodes in the graph.")
     if impose_edges == True:
         if num_steps < 1 or num_steps > data.num_nodes:
@@ -293,12 +293,13 @@ def get_subgraph_with_terminal_nodes_step(data, num_steps, impose_edges=False):
         neighbors = [i for i in neighbors if i not in subgraph_atoms]
         random.shuffle(neighbors)
 
-        if len(neighbors) + count_num_steps >= num_steps:
-            predicted = neighbors[:num_steps - count_num_steps]
-            for neighbor in neighbors[num_steps - count_num_steps:]:
+        if len(neighbors) + count_num_steps > num_steps:
+            predicted = neighbors[num_steps - count_num_steps:]
+            for neighbor in neighbors[:num_steps - count_num_steps]:
                 id_map[neighbor] = new_id
                 new_id += 1
                 subgraph_atoms.append(neighbor)
+                count_num_steps += 1
             external_neighbors = []
             for neighbor in predicted:
                 #get edge attributes
@@ -320,26 +321,32 @@ def get_subgraph_with_terminal_nodes_step(data, num_steps, impose_edges=False):
             subgraph_data = get_subgraph(data, subgraph_indices, id_map)
             return subgraph_data, terminal_node_infos, id_map
 
+        
+
 
         for neighbor in neighbors:
             queue.append(neighbor)
             subgraph_atoms.append(neighbor)
             id_map[neighbor] = new_id
             new_id += 1
-            count_num_steps += 1   
-
-        visited.add(current)
-        if impose_edges == False:
-            #For the edges prediction we only count the number of atoms added
-            count_num_steps += 1
+            count_num_steps += 1 
 
         # Stop if we've reached the desired number of steps
-        if count_num_steps == num_steps:
+        if count_num_steps >= num_steps:
             # we predict a stop in terminal_node_infos
             terminal_node_infos = (current, [])
             subgraph_indices = torch.tensor(list(subgraph_atoms), dtype=torch.long)
             subgraph_data = get_subgraph(data, subgraph_indices, id_map)
-            return subgraph_data, terminal_node_infos, id_map
+            return subgraph_data, terminal_node_infos, id_map  
+        
+
+        visited.add(current)
+
+        if impose_edges == False:
+            #For the edges prediction we only count the number of atoms added
+            count_num_steps += 1
+
+
 
     raise ValueError("The number of steps is too high for the graph.")    
 

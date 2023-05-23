@@ -1,6 +1,8 @@
 import torch
 import torch.nn.functional as F
 
+import torch.nn as nn
+
 def pseudo_accuracy_metric(model_output, target, random = False):
 
     if random:
@@ -55,6 +57,18 @@ def pseudo_precision_for_each_class(model_output, target, random=False):
         count_per_class[model_output[i]] += 1
 
     return correct, count_per_class
+
+
+class MaskedCrossEntropyLoss(nn.Module):
+    def __init__(self):
+        super(MaskedCrossEntropyLoss, self).__init__()
+        self.loss_fn = nn.CrossEntropyLoss(reduction='none')
+
+    def forward(self, output, target, mask):
+        loss = self.loss_fn(output, target)
+        mask = mask.float()
+        loss = loss * mask
+        return loss.sum() / mask.sum()
 
 
 class FocalLoss(torch.nn.Module):
