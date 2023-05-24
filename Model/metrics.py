@@ -20,16 +20,18 @@ def pseudo_accuracy_metric(model_output, target, random = False):
     return correct
 
 
-def pseudo_accuracy_metric_gnn3(model_input, model_output, target, random = True):
+def pseudo_accuracy_metric_gnn3(model_input, model_output, target, mask, random = True):
     
     num_wanted_cycles = 0
     cycles_created = 0
     good_cycles_created = 0
+    cycles_not_created = 0
+    cycles_shouldnt_created = 0
     good_types_cycles_predicted = 0
 
     # Calculate cumulative sums of node counts for each graph
     cumsum_node_counts = model_input.batch.bincount().cumsum(dim=0)
-    
+    has_cycle =False
     for i in range(model_input.num_graphs):
         if i == 0:
             # For the first graph, start_index should be 0
@@ -44,19 +46,35 @@ def pseudo_accuracy_metric_gnn3(model_input, model_output, target, random = True
         # check if there is one cycle created in this graph
         current_graph_target = target[start_index:end_index]
         current_graph_output = model_output[start_index:end_index]
-        if current_graph_target[] :
+        mask_graph = mask[start_index:end_index]
+
+        current_graph_predicted = torch.multinomial(current_graph_output,1)
+        current_graph_predicted_masked = current_graph_predicted[mask_graph]
+
+        if torch.sum(current_graph_target[:,:4].max(dim=1)[0]) > 0: 
+            # the graph has a cycle
+            has_cycle = True
             num_wanted_cycles +=1
+        
+        
+        if has_cycle and torch.sum(current_graph_predicted_masked < 4) >0 :
+            # look if we have predicted one cycle (frist 4  in the vector of 5 ) in this molecul
+            cycles_created +=1
+            for i in range(current_graph_predicted_masked.shape[1]):
+                if current_graph_predicted_masked[i] < 4 and torch.argmax(current_graph_target[mask_graph][i])<4:
+                    good_cycles_created += 1
+                    if current_graph_predicted_masked[i] == torch.argmax(current_graph_target[mask_graph][i]):
+                        good_types_cycles_predicted += 1
+        if has_cycle and torch.sum(current_graph_predicted_masked == 4) >0:
+            cycles_not_created +=1
 
-        # look if we have predicted one cycle (frist 4  in the vector of 5 ) in this molecule
-        cycles_created +=1
-        # Set the new feature to 1 for nodes before the 'current_atom'
-        new_feature[start_index:current_atom_index] = 1
+        if not(has_cycle) and torch.sum(current_graph_predicted_masked < 4) >0 :
+            cycles_shouldnt_created += 1
 
-
-
-
-    return 
-
+        has_cycle = False
+        # Set the new feature to 1 for nodes before the 'current_atom
+    
+    return cycles_created , good_cycles_created , good_types_cycles_predicted , cycles_not_created , cycles_shouldnt_created, num_wanted_cycles
 
 def pseudo_recall_for_each_class(model_output, target, random = False):
     encoding_size = len(model_output[0])
