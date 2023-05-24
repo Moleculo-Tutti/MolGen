@@ -19,6 +19,45 @@ def pseudo_accuracy_metric(model_output, target, random = False):
 
     return correct
 
+
+def pseudo_accuracy_metric_gnn3(model_input, model_output, target, random = True):
+    
+    num_wanted_cycles = 0
+    cycles_created = 0
+    good_cycles_created = 0
+    good_types_cycles_predicted = 0
+
+    # Calculate cumulative sums of node counts for each graph
+    cumsum_node_counts = model_input.batch.bincount().cumsum(dim=0)
+    
+    for i in range(model_input.num_graphs):
+        if i == 0:
+            # For the first graph, start_index should be 0
+            start_index = 0
+        else:
+            # For the subsequent graphs, start_index is the end_index of the previous graph
+            start_index = cumsum_node_counts[i-1]
+        
+        # end_index is the cumulative sum of node counts up to the current graph
+        end_index = cumsum_node_counts[i]
+
+        # check if there is one cycle created in this graph
+        current_graph_target = target[start_index:end_index]
+        current_graph_output = model_output[start_index:end_index]
+        if current_graph_target[] :
+            num_wanted_cycles +=1
+
+        # look if we have predicted one cycle (frist 4  in the vector of 5 ) in this molecule
+        cycles_created +=1
+        # Set the new feature to 1 for nodes before the 'current_atom'
+        new_feature[start_index:current_atom_index] = 1
+
+
+
+
+    return 
+
+
 def pseudo_recall_for_each_class(model_output, target, random = False):
     encoding_size = len(model_output[0])
     if random:
