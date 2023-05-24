@@ -49,6 +49,42 @@ class ModelWithEdgeFeatures(torch.nn.Module):
 
         for message_passing_layer, batch_norm_layer in zip(self.message_passing_layers, self.batch_norm_layers):
             x = message_passing_layer(x, edge_index, edge_attr)
+            if self.use_batchnorm  and message_passing_layer != self.message_passing_layers[-1]:
+                x = batch_norm_layer(x)
+            # Put a ReLU activation after each layer but not after the last one
+            if message_passing_layer != self.message_passing_layers[-1]:
+                x = F.relu(x)
+            if self.use_dropout:
+                x = F.dropout(x, training=self.training)
+        
+        return x
+    
+
+class ModelWithhraph_embedding also(torch.nn.Module):
+    def __init__(self, in_channels, hidden_channels_list, edge_channels, use_dropout=True, use_batchnorm=True):
+        torch.manual_seed(12345)
+        super(ModelWithEdgeFeatures, self).__init__()
+
+        self.use_dropout = use_dropout
+        self.use_batchnorm = use_batchnorm
+
+        self.message_passing_layers = torch.nn.ModuleList()
+        self.batch_norm_layers = torch.nn.ModuleList()
+        prev_channels = in_channels
+        for hidden_channels in hidden_channels_list:
+            self.message_passing_layers.append(
+                CustomMessagePassingLayer(prev_channels, hidden_channels, edge_channels)
+            )
+            if self.use_batchnorm:
+                self.batch_norm_layers.append(torch.nn.BatchNorm1d(hidden_channels))
+            prev_channels = hidden_channels
+
+
+    def forward(self, data):
+        x, edge_index, edge_attr, batch, mask = data.x, data.edge_index, data.edge_attr, data.batch, data.mask
+
+        for message_passing_layer, batch_norm_layer in zip(self.message_passing_layers, self.batch_norm_layers):
+            x = message_passing_layer(x, edge_index, edge_attr)
             if self.use_batchnorm:
                 x = batch_norm_layer(x)
             # Put a ReLU activation after each layer but not after the last one
@@ -58,3 +94,9 @@ class ModelWithEdgeFeatures(torch.nn.Module):
                 x = F.dropout(x, training=self.training)
         
         return x
+    
+
+
+
+    
+
