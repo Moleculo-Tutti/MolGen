@@ -44,8 +44,7 @@ def train_one_epoch(loader, model, encoding_size, device, optimizer, criterion, 
     num_correct_precision = torch.zeros(encoding_size)
     count_per_class_recall = torch.zeros(encoding_size)
     count_per_class_precision = torch.zeros(encoding_size)
-    if print_bar:
-        progress_bar = tqdm_notebook(loader, desc="Training", unit="batch")
+    progress_bar = tqdm_notebook(loader, desc="Training", unit="batch")
 
     avg_output_vector = np.zeros(encoding_size)  # Initialize the average output vector
     avg_label_vector = np.zeros(encoding_size)  # Initialize the average label vector

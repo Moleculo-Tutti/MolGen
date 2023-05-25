@@ -20,7 +20,7 @@ from pathlib import Path
 from tqdm import tqdm
 from tqdm.notebook import tqdm as tqdm_notebook
 import numpy as np
-from sklearn.metrics import accuracy_score, recall_score, precision_score
+
 
 import sys
 import os
@@ -37,19 +37,18 @@ from Model.metrics import pseudo_accuracy_metric, pseudo_recall_for_each_class, 
 
 
 
-def train_one_epoch(loader, model, encoding_size, device, optimizer, criterion, print_bar = False):
+def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, print_bar = False):
     model.train()
     total_loss = 0
     num_correct = 0
-    num_correct_recall = torch.zeros(encoding_size)
-    num_correct_precision = torch.zeros(encoding_size)
-    count_per_class_recall = torch.zeros(encoding_size)
-    count_per_class_precision = torch.zeros(encoding_size)
-    if print_bar:
-        progress_bar = tqdm_notebook(loader, desc="Training", unit="batch")
+    num_correct_recall = torch.zeros(size_edge)
+    num_correct_precision = torch.zeros(size_edge)
+    count_per_class_recall = torch.zeros(size_edge)
+    count_per_class_precision = torch.zeros(size_edge)
+    progress_bar = tqdm_notebook(loader, desc="Training", unit="batch")
 
-    avg_output_vector = np.zeros(encoding_size)  # Initialize the average output vector
-    avg_label_vector = np.zeros(encoding_size)  # Initialize the average label vector
+    avg_output_vector = np.zeros(size_edge)  # Initialize the average output vector
+    avg_label_vector = np.zeros(size_edge)  # Initialize the average label vector
     total_graphs_processed = 0
 
     
@@ -108,56 +107,58 @@ def train_one_epoch(loader, model, encoding_size, device, optimizer, criterion, 
         true_labels = np.array(true_labels)
         predicted_labels = np.array(predicted_labels)
 
-        # Compute accuracy, recall, and precision for each class
-        accuracy = accuracy_score(true_labels, predicted_labels)
-        recall = recall_score(true_labels, predicted_labels, average=None)
-        precision = precision_score(true_labels, predicted_labels, average=None)
-
 
 
     return total_loss / len(loader.dataset), current_avg_label_vector, current_avg_output_vector, avg_correct , avg_correct_precision, avg_correct_recall
 
-def eval_one_epoch(loader, model, encoding_size, device, optimizer, criterion):
+def eval_one_epoch(loader, model, size_edge, device, optimizer, criterion):
     model.eval()
     total_loss = 0
-    mse_sum = 0
     num_correct = 0
-    num_correct_recall = torch.zeros(encoding_size)
-    num_correct_precision = torch.zeros(encoding_size)
-    count_per_class_recall = torch.zeros(encoding_size)
-    count_per_class_precision = torch.zeros(encoding_size)
+    num_correct_recall = torch.zeros(size_edge)
+    num_correct_precision = torch.zeros(size_edge)
+    count_per_class_recall = torch.zeros(size_edge)
+    count_per_class_precision = torch.zeros(size_edge)
 
 
-    avg_output_vector = np.zeros(encoding_size)  # Initialize the average output vector
-    avg_label_vector = np.zeros(encoding_size)  # Initialize the average label vector
+    avg_output_vector = np.zeros(size_edge)  # Initialize the average output vector
+    avg_label_vector = np.zeros(size_edge)  # Initialize the average label vector
     total_graphs_processed = 0
 
     
 
     for batch_idx, batch in enumerate(loader):
         data = batch[0]
-        terminal_node_infos = batch[1]
+        edge_infos = batch[1]
         data = data.to(device)
         optimizer.zero_grad()
         logit_out = model(data)
-        terminal_node_infos = terminal_node_infos.to(device)
+        edge_infos = edge_infos.to(device)
 
+        loss = criterion(logit_out, edge_infos)
+       
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item() * data.num_graphs
+        
         out = F.softmax(logit_out, dim=1)
-        loss = criterion(logit_out, terminal_node_infos)
-        num_correct += pseudo_accuracy_metric(out.detach().cpu(), terminal_node_infos.detach().cpu(), random=True)
 
-        recall_output = pseudo_recall_for_each_class(out.detach().cpu(), terminal_node_infos.detach().cpu(), random=True)
-        precision_output = pseudo_precision_for_each_class(out.detach().cpu(), terminal_node_infos.detach().cpu(), random=True)
+        # Collect true labels and predicted labels
+        num_correct += pseudo_accuracy_metric(out.detach().cpu(), edge_infos.detach().cpu(), random=True)
+
+        recall_output = pseudo_recall_for_each_class(out.detach().cpu(), edge_infos.detach().cpu(), random=True)
+        precision_output = pseudo_precision_for_each_class(out.detach().cpu(), edge_infos.detach().cpu(), random=True)
         num_correct_recall += recall_output[0]
         num_correct_precision += precision_output[0]
         count_per_class_recall += recall_output[1]
         count_per_class_precision += precision_output[1]
-        total_loss += loss.item() * data.num_graphs
 
-
+        current_avg_output_vector = avg_output_vector / total_graphs_processed
+        current_avg_label_vector = avg_label_vector / total_graphs_processed
+        
         # Update the average output vector
         avg_output_vector += out.detach().cpu().numpy().mean(axis=0) * data.num_graphs
-        avg_label_vector += terminal_node_infos.detach().cpu().numpy().mean(axis=0) * data.num_graphs
+        avg_label_vector += edge_infos.detach().cpu().numpy().mean(axis=0) * data.num_graphs
         total_graphs_processed += data.num_graphs
         current_avg_output_vector = avg_output_vector / total_graphs_processed
         current_avg_label_vector = avg_label_vector / total_graphs_processed
@@ -165,23 +166,30 @@ def eval_one_epoch(loader, model, encoding_size, device, optimizer, criterion):
         avg_correct_recall = num_correct_recall / count_per_class_recall
         avg_correct_precision = num_correct_precision / count_per_class_precision
 
+        true_labels = np.array(true_labels)
+        predicted_labels = np.array(predicted_labels)
+
+
+
     return total_loss / len(loader.dataset), current_avg_label_vector, current_avg_output_vector, avg_correct , avg_correct_precision, avg_correct_recall
 
 
 
 
-def train_GNN1(name : str, datapath_train, datapath_val, n_epochs,  encoding_size, GCN_size : list, mlp_size, edge_size, feature_position = True, use_dropout = False, lr = 0.0001 , print_bar = False):
 
-    dataset_train = ZincSubgraphDatasetStep(data_path = datapath_train, GNN_type=1)
-    dataset_val = ZincSubgraphDatasetStep(data_path = datapath_val, GNN_type=1)
+
+def train_GNN2(name : str, datapath_train, datapath_val, n_epochs,  encoding_size, GCN_size : list, mlp_size, edge_size = 4, feature_position = True, use_dropout = False, lr = 0.0001 , print_bar = False):
+
+    dataset_train = ZincSubgraphDatasetStep(data_path = datapath_train, GNN_type=2)
+    dataset_val = ZincSubgraphDatasetStep(data_path = datapath_val, GNN_type=2)
     if feature_position :
-        loader_train = DataLoader(dataset_train, batch_size=128, shuffle=True, collate_fn=custom_collate_passive_add_feature)
-        loader_val = DataLoader(dataset_val, batch_size=128, shuffle=True, collate_fn=custom_collate_passive_add_feature)
-        model = ModelWithEdgeFeatures(in_channels=encoding_size + 1, hidden_channels_list= GCN_size, mlp_hidden_channels=mlp_size, edge_channels=edge_size, num_classes=encoding_size, use_dropout=use_dropout)
+        loader_train = DataLoader(dataset_train, batch_size=128, shuffle=True, collate_fn=custom_collate_passive_add_feature_GNN2)
+        loader_val = DataLoader(dataset_val, batch_size=128, shuffle=True, collate_fn=custom_collate_passive_add_feature_GNN2)
+        model = ModelWithEdgeFeatures(in_channels=encoding_size + 1, hidden_channels_list= GCN_size, mlp_hidden_channels=mlp_size, edge_channels=edge_size, num_classes=edge_size, use_dropout=use_dropout)
     else :
-        loader_train = DataLoader(dataset_train, batch_size=128, shuffle=True, collate_fn=custom_collate_GNN1)
-        loader_val = DataLoader(dataset_val, batch_size=128, shuffle=True, collate_fn=custom_collate_GNN1)
-        model = ModelWithEdgeFeatures(in_channels=encoding_size, hidden_channels_list= GCN_size, mlp_hidden_channels=mlp_size, edge_channels=edge_size, num_classes=encoding_size, use_dropout=use_dropout)
+        loader_train = DataLoader(dataset_train, batch_size=128, shuffle=True, collate_fn=custom_collate_GNN2)
+        loader_val = DataLoader(dataset_val, batch_size=128, shuffle=True, collate_fn=custom_collate_GNN2)
+        model = ModelWithEdgeFeatures(in_channels=encoding_size, hidden_channels_list= GCN_size, mlp_hidden_channels=mlp_size, edge_channels=edge_size, num_classes=edge_size, use_dropout=use_dropout)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     optimizer = AdamW(model.parameters(), lr=lr)
