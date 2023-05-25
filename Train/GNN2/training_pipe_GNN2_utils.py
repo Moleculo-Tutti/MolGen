@@ -20,6 +20,7 @@ from pathlib import Path
 from tqdm import tqdm
 from tqdm.notebook import tqdm as tqdm_notebook
 import numpy as np
+from sklearn.metrics import accuracy_score, recall_score, precision_score
 
 import sys
 import os
@@ -30,8 +31,8 @@ parent_parent_dir = os.path.dirname(parent_dir)
 sys.path.append(parent_dir)
 sys.path.append(parent_parent_dir)
 
-from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_passive_add_feature, custom_collate_GNN1
-from Model.GNN1 import ModelWithEdgeFeatures
+from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_passive_add_feature_GNN2, custom_collate_GNN2
+from Model.GNN2 import ModelWithEdgeFeatures
 from Model.metrics import pseudo_accuracy_metric, pseudo_recall_for_each_class, pseudo_precision_for_each_class
 
 
@@ -55,34 +56,37 @@ def train_one_epoch(loader, model, encoding_size, device, optimizer, criterion, 
 
     for batch_idx, batch in enumerate(progress_bar):
         data = batch[0]
-        terminal_node_infos = batch[1]
+        edge_infos = batch[1]
         data = data.to(device)
         optimizer.zero_grad()
         logit_out = model(data)
-        terminal_node_infos = terminal_node_infos.to(device)
+        edge_infos = edge_infos.to(device)
 
+        loss = criterion(logit_out, edge_infos)
+       
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item() * data.num_graphs
+        loss_value = total_loss / (data.num_graphs * (progress_bar.last_print_n + 1))
+        
         out = F.softmax(logit_out, dim=1)
-        loss = criterion(logit_out, terminal_node_infos)
-        num_correct += pseudo_accuracy_metric(out.detach().cpu(), terminal_node_infos.detach().cpu(), random=True)
 
-        recall_output = pseudo_recall_for_each_class(out.detach().cpu(), terminal_node_infos.detach().cpu(), random=True)
-        precision_output = pseudo_precision_for_each_class(out.detach().cpu(), terminal_node_infos.detach().cpu(), random=True)
+        # Collect true labels and predicted labels
+        num_correct += pseudo_accuracy_metric(out.detach().cpu(), edge_infos.detach().cpu(), random=True)
+
+        recall_output = pseudo_recall_for_each_class(out.detach().cpu(), edge_infos.detach().cpu(), random=True)
+        precision_output = pseudo_precision_for_each_class(out.detach().cpu(), edge_infos.detach().cpu(), random=True)
         num_correct_recall += recall_output[0]
         num_correct_precision += precision_output[0]
         count_per_class_recall += recall_output[1]
         count_per_class_precision += precision_output[1]
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.item() * data.num_graphs
-        if print_bar:
-            loss_value = total_loss / (data.num_graphs * (progress_bar.last_print_n + 1))
 
-
-
-
+        current_avg_output_vector = avg_output_vector / total_graphs_processed
+        current_avg_label_vector = avg_label_vector / total_graphs_processed
+        
         # Update the average output vector
         avg_output_vector += out.detach().cpu().numpy().mean(axis=0) * data.num_graphs
-        avg_label_vector += terminal_node_infos.detach().cpu().numpy().mean(axis=0) * data.num_graphs
+        avg_label_vector += edge_infos.detach().cpu().numpy().mean(axis=0) * data.num_graphs
         total_graphs_processed += data.num_graphs
         current_avg_output_vector = avg_output_vector / total_graphs_processed
         current_avg_label_vector = avg_label_vector / total_graphs_processed
@@ -90,7 +94,7 @@ def train_one_epoch(loader, model, encoding_size, device, optimizer, criterion, 
         avg_correct_recall = num_correct_recall / count_per_class_recall
         avg_correct_precision = num_correct_precision / count_per_class_precision
         avg_f1 = 2 * (avg_correct_recall * avg_correct_precision) / (avg_correct_recall + avg_correct_precision)
-        if print_bar :
+        if print_bar:
             progress_bar.set_postfix(loss=loss_value, avg_output_vector=current_avg_output_vector, 
                                  avg_label_vector=current_avg_label_vector, 
                                  avg_correct=avg_correct, num_correct=num_correct, 
@@ -101,12 +105,22 @@ def train_one_epoch(loader, model, encoding_size, device, optimizer, criterion, 
                                  count_per_class_precision=count_per_class_precision,
                                  count_per_class_recall=count_per_class_recall)
 
+        true_labels = np.array(true_labels)
+        predicted_labels = np.array(predicted_labels)
+
+        # Compute accuracy, recall, and precision for each class
+        accuracy = accuracy_score(true_labels, predicted_labels)
+        recall = recall_score(true_labels, predicted_labels, average=None)
+        precision = precision_score(true_labels, predicted_labels, average=None)
+
+
 
     return total_loss / len(loader.dataset), current_avg_label_vector, current_avg_output_vector, avg_correct , avg_correct_precision, avg_correct_recall
 
 def eval_one_epoch(loader, model, encoding_size, device, optimizer, criterion):
     model.eval()
     total_loss = 0
+    mse_sum = 0
     num_correct = 0
     num_correct_recall = torch.zeros(encoding_size)
     num_correct_precision = torch.zeros(encoding_size)

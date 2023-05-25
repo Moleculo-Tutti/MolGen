@@ -197,6 +197,17 @@ def custom_collate_GNN1(batch):
     terminal_nodes_info_tensor = torch.stack(terminal_nodes_info_list, dim=0)
     return sg_data_batch, terminal_nodes_info_tensor
 
+def custom_collate_passive_add_feature_GNN2(batch):
+    sg_data_list = [item for item in batch]
+    terminal_nodes_info_list = [item.edge_neighbor for item in batch]
+
+    sg_data_batch = Batch.from_data_list(sg_data_list)
+    terminal_nodes_info_tensor = torch.stack(terminal_nodes_info_list, dim=0)
+
+    feature_sg_data_batch = add_node_feature_based_on_position(sg_data_batch)
+    return feature_sg_data_batch, terminal_nodes_info_tensor
+
+
 def custom_collate_GNN2(batch):
     sg_data_list = [item for item in batch]
     terminal_nodes_info_list = [item.edge_neighbor for item in batch]
@@ -216,6 +227,19 @@ def custom_collate_GNN3(batch):
     mask_tensor = torch.cat(mask_list, dim=0)
     
     return sg_data_batch, cycle_label_tensor, mask_tensor
+
+def custom_collate_passive_add_feature_GNN3(batch):
+    sg_data_list = [item for item in batch]
+    cycle_label_list = [item.cycle_label for item in batch]
+    mask_list = [item.mask for item in batch]
+
+    sg_data_batch = Batch.from_data_list(sg_data_list)
+    cycle_label_tensor = torch.cat(cycle_label_list, dim=0)
+    mask_tensor = torch.cat(mask_list, dim=0)
+
+    feature_sg_data_batch = add_node_feature_based_on_position(sg_data_batch)
+    return feature_sg_data_batch, cycle_label_tensor, mask_tensor
+
 
 def load_compressed_batch(file_path):
     with open(file_path, 'rb') as f:
