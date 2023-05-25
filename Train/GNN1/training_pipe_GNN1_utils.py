@@ -13,24 +13,27 @@ import torch_geometric.transforms as T
 
 from torch_geometric.data import Batch
 
-from torch_geometric.nn import GCNConv, global_mean_pool
-from torch_geometric.nn import global_add_pool
-from torch_geometric.nn import GraphConv
 from torch.utils.data import DataLoader
 
 from pathlib import Path
 
 from tqdm import tqdm
+from tqdm.notebook import tqdm as tqdm_notebook
+import numpy as np
 
 import sys
 import os
 
+cwd = os.getcwd()
+parent_dir = os.path.dirname(cwd)
+parent_parent_dir = os.path.dirname(parent_dir)
+sys.path.append(parent_dir)
+sys.path.append(parent_parent_dir)
+
 from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_passive_add_feature, custom_collate_GNN1
 from Model.GNN1 import ModelWithEdgeFeatures
 from Model.metrics import pseudo_accuracy_metric, pseudo_recall_for_each_class, pseudo_precision_for_each_class
-from tqdm.notebook import tqdm as tqdm_notebook
-from sklearn.metrics import mean_squared_error
-import numpy as np
+
 
 
 def train_one_epoch(loader, model, encoding_size, device, optimizer, criterion, print_bar = False):
@@ -76,10 +79,7 @@ def train_one_epoch(loader, model, encoding_size, device, optimizer, criterion, 
             loss_value = total_loss / (data.num_graphs * (progress_bar.last_print_n + 1))
 
 
-        # Compute MSE
-        mse = mean_squared_error(terminal_node_infos.detach().cpu(), out.detach().cpu())
-        mse_sum += mse * data.num_graphs
-        mse_value = mse_sum / (data.num_graphs * (progress_bar.last_print_n + 1))
+
 
         # Update the average output vector
         avg_output_vector += out.detach().cpu().numpy().mean(axis=0) * data.num_graphs
@@ -92,7 +92,7 @@ def train_one_epoch(loader, model, encoding_size, device, optimizer, criterion, 
         avg_correct_precision = num_correct_precision / count_per_class_precision
         avg_f1 = 2 * (avg_correct_recall * avg_correct_precision) / (avg_correct_recall + avg_correct_precision)
         if print_bar :
-            progress_bar.set_postfix(loss=loss_value, mse=mse_value, avg_output_vector=current_avg_output_vector, 
+            progress_bar.set_postfix(loss=loss_value, avg_output_vector=current_avg_output_vector, 
                                  avg_label_vector=current_avg_label_vector, 
                                  avg_correct=avg_correct, num_correct=num_correct, 
                                  total_graphs_processed=total_graphs_processed, 
@@ -140,15 +140,8 @@ def eval_one_epoch(loader, model, encoding_size, device, optimizer, criterion):
         num_correct_precision += precision_output[0]
         count_per_class_recall += recall_output[1]
         count_per_class_precision += precision_output[1]
-        loss.backward()
-        optimizer.step()
         total_loss += loss.item() * data.num_graphs
 
-
-        # Compute MSE
-        mse = mean_squared_error(terminal_node_infos.detach().cpu(), out.detach().cpu())
-        mse_sum += mse * data.num_graphs
-        mse_value = mse_sum / (data.num_graphs * (progress_bar.last_print_n + 1))
 
         # Update the average output vector
         avg_output_vector += out.detach().cpu().numpy().mean(axis=0) * data.num_graphs
@@ -159,7 +152,6 @@ def eval_one_epoch(loader, model, encoding_size, device, optimizer, criterion):
         avg_correct = num_correct / total_graphs_processed
         avg_correct_recall = num_correct_recall / count_per_class_recall
         avg_correct_precision = num_correct_precision / count_per_class_precision
-        avg_f1 = 2 * (avg_correct_recall * avg_correct_precision) / (avg_correct_recall + avg_correct_precision)
 
     return total_loss / len(loader.dataset), current_avg_label_vector, current_avg_output_vector, avg_correct , avg_correct_precision, avg_correct_recall
 
@@ -229,25 +221,25 @@ def train_GNN1(name : str, datapath_train, datapath_val, n_epochs,  encoding_siz
             loader_train, model, encoding_size, device, optimizer, criterion, print_bar = print_bar)
         training_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, avg_correct, avg_correct_precision, avg_correct_recall]
         loss, avg_label_vector, avg_output_vector, avg_correct, avg_correct_precision, avg_correct_recall = eval_one_epoch(
-            loader_train, model, encoding_size, device, optimizer, criterion)
+            loader_val, model, encoding_size, device, optimizer, criterion)
         eval_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, avg_correct, avg_correct_precision, avg_correct_recall]
 
     #save the model(all with optimizer step, the loss ) every 5 epochs
 
-    save_every_n_epochs = 20
-    if (epoch) % save_every_n_epochs == 0:
-        checkpoint = {
-            'epoch': epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            # Add any other relevant information you want to save here
-        }
-        epoch_save_file : os.path.join(directory_path_epochs, f'checkpoint_epoch_{epoch}_{name}.pt')
-        torch.save(checkpoint, epoch_save_file)
+        save_every_n_epochs = 20
+        if (epoch) % save_every_n_epochs == 0:
+            checkpoint = {
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                # Add any other relevant information you want to save here
+            }
+            epoch_save_file = os.path.join(directory_path_epochs, f'checkpoint_epoch_{epoch}_{name}.pt')
+            torch.save(checkpoint, epoch_save_file)
 
-    training_csv_directory = os.path.join(directory_path_experience, 'training_history.csv')    
-    training_history.to_csv(training_csv_directory)
+        training_csv_directory = os.path.join(directory_path_experience, 'training_history.csv')    
+        training_history.to_csv(training_csv_directory)
 
-    eval_csv_directory = os.path.join(directory_path_experience, 'evak_history.csv')    
-    eval_history.to_csv(eval_csv_directory)
+        eval_csv_directory = os.path.join(directory_path_experience, 'eval_history.csv')    
+        eval_history.to_csv(eval_csv_directory)
     
