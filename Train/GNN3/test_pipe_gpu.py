@@ -20,12 +20,15 @@ def main():
     GCN_size = ast.literal_eval(GCN_size_str)
     edge_size = int(input("Edge size: "))
     n_epochs = int(input("Number of epochs: "))
+    graph_embedding = bool(input("graph embedding answer True or False: "))
+    mlp_hidden = int(input("mlp_hidden: "))
+    batch_size = int(input("batch siez (classi is 128) : "))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Call the train_GNN3 function with the provided arguments
     results = train_GNN3(name, datapath_train, datapath_val, n_epochs, encoding_size, GCN_size, edge_size,
-                         feature_position=False, use_dropout=False, lr=0.0001, print_bar=True)
+                         feature_position=False, use_dropout=False, lr=0.0001, print_bar=False, graph_embedding= graph_embedding, mlp_hidden= mlp_hidden, batch_size= batch_size, modif_accelerate= True)
 
     # Set the directory path for saving the training history
     dirpath = Path('.') / 'experiments' / name / 'training_history.csv'

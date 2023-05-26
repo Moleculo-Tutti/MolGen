@@ -20,6 +20,7 @@ from pathlib import Path
 from tqdm import tqdm
 from tqdm.notebook import tqdm as tqdm_notebook
 import numpy as np
+import time
 
 
 import sys
@@ -32,7 +33,7 @@ sys.path.append(parent_dir)
 sys.path.append(parent_parent_dir)
 
 from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_passive_add_feature_GNN3, custom_collate_GNN3
-from Model.GNN3 import ModelWithEdgeFeatures, ModelWithgraph_embedding
+from Model.GNN3 import ModelWithEdgeFeatures, ModelWithgraph_embedding, ModelWithgraph_embedding_modif
 from Model.metrics import  pseudo_accuracy_metric_gnn3
 
 
@@ -177,27 +178,39 @@ def eval_one_epoch(loader, model, size_edge, device, optimizer, criterion):
 
 
 def train_GNN3(name : str, datapath_train, datapath_val, n_epochs,  encoding_size, GCN_size : list, mlp_size, edge_size = 4, feature_position = True, 
-                use_dropout = False, lr = 0.0001 , print_bar = False, graph_embedding = False, mlp_hidden = 512, num_classes = 5, size_info = False):
+                use_dropout = False, lr = 0.0001 , print_bar = False, graph_embedding = False, mlp_hidden = 512, num_classes = 5, size_info = False, batch_size = 128, modif_accelerate = False):
 
     dataset_train = ZincSubgraphDatasetStep(data_path = datapath_train, GNN_type=3)
     dataset_val = ZincSubgraphDatasetStep(data_path = datapath_val, GNN_type=3)
     if feature_position :
-        loader_train = DataLoader(dataset_train, batch_size=128, shuffle=True, collate_fn=custom_collate_passive_add_feature_GNN3)
-        loader_val = DataLoader(dataset_val, batch_size=128, shuffle=True, collate_fn=custom_collate_passive_add_feature_GNN3)
+        loader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, collate_fn=custom_collate_passive_add_feature_GNN3)
+        loader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=True, collate_fn=custom_collate_passive_add_feature_GNN3)
         if graph_embedding:
-            model = ModelWithgraph_embedding(in_channels = encoding_size+1,hidden_channels_list= GCN_size, mlp_hidden_channels= mlp_hidden, 
+            if modif_accelerate :
+                model = ModelWithgraph_embedding_modif(in_channels = encoding_size+1,hidden_channels_list= GCN_size, mlp_hidden_channels= mlp_hidden, 
+                                             edge_channels= edge_size, num_classes= num_classes,size_info= size_info)
+            else:
+                model = ModelWithgraph_embedding(in_channels = encoding_size+1,hidden_channels_list= GCN_size, mlp_hidden_channels= mlp_hidden, 
                                              edge_channels= edge_size, num_classes= num_classes,size_info= size_info)
         else:
             model = ModelWithEdgeFeatures(in_channels=encoding_size + 1, hidden_channels_list= GCN_size, edge_channels=edge_size, use_dropout=use_dropout)
             
     else :
-        loader_train = DataLoader(dataset_train, batch_size=128, shuffle=True, collate_fn=custom_collate_GNN3)
-        loader_val = DataLoader(dataset_val, batch_size=128, shuffle=True, collate_fn=custom_collate_GNN3)
+        loader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, collate_fn=custom_collate_GNN3)
+        loader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=True, collate_fn=custom_collate_GNN3)
         if graph_embedding:
-            model = ModelWithgraph_embedding(in_channels = encoding_size,hidden_channels_list= GCN_size, mlp_hidden_channels= mlp_hidden, 
+            if modif_accelerate :
+                model = ModelWithgraph_embedding_modif(in_channels = encoding_size,hidden_channels_list= GCN_size, mlp_hidden_channels= mlp_hidden, 
+                                             edge_channels= edge_size, num_classes= num_classes,size_info= size_info)
+            else :
+                model = ModelWithgraph_embedding(in_channels = encoding_size,hidden_channels_list= GCN_size, mlp_hidden_channels= mlp_hidden, 
                                              edge_channels= edge_size, num_classes= num_classes,size_info= size_info)
         else:
             model = ModelWithEdgeFeatures(in_channels=encoding_size , hidden_channels_list= GCN_size, edge_channels=edge_size, use_dropout=use_dropout)
+
+    
+
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     optimizer = AdamW(model.parameters(), lr=lr)
@@ -255,7 +268,7 @@ def train_GNN3(name : str, datapath_train, datapath_val, n_epochs,  encoding_siz
 
     #save the model(all with optimizer step, the loss ) every 5 epochs
 
-        save_every_n_epochs = 20
+        save_every_n_epochs = 10
         if (epoch) % save_every_n_epochs == 0:
             checkpoint = {
                 'epoch': epoch,
