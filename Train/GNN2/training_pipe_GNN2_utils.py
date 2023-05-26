@@ -104,8 +104,7 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, prin
                                  count_per_class_precision=count_per_class_precision,
                                  count_per_class_recall=count_per_class_recall)
 
-        true_labels = np.array(true_labels)
-        predicted_labels = np.array(predicted_labels)
+
 
 
 
@@ -166,8 +165,6 @@ def eval_one_epoch(loader, model, size_edge, device, optimizer, criterion):
         avg_correct_recall = num_correct_recall / count_per_class_recall
         avg_correct_precision = num_correct_precision / count_per_class_precision
 
-        true_labels = np.array(true_labels)
-        predicted_labels = np.array(predicted_labels)
 
 
 
@@ -238,10 +235,10 @@ def train_GNN2(name : str, datapath_train, datapath_val, n_epochs,  encoding_siz
     #beginning the epoch
     for epoch in range(0, n_epochs+1):
         loss, avg_label_vector, avg_output_vector, avg_correct, avg_correct_precision, avg_correct_recall = train_one_epoch(
-            loader_train, model, encoding_size, device, optimizer, criterion, print_bar = print_bar)
+            loader_train, model, edge_size, device, optimizer, criterion, print_bar = print_bar)
         training_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, avg_correct, avg_correct_precision, avg_correct_recall]
         loss, avg_label_vector, avg_output_vector, avg_correct, avg_correct_precision, avg_correct_recall = eval_one_epoch(
-            loader_val, model, encoding_size, device, optimizer, criterion)
+            loader_val, model, edge_size, device, optimizer, criterion)
         eval_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, avg_correct, avg_correct_precision, avg_correct_recall]
 
     #save the model(all with optimizer step, the loss ) every 5 epochs
