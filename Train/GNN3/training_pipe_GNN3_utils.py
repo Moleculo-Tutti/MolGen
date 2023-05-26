@@ -112,7 +112,7 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, prin
         global_well_placed_cycles/global_num_wanted_cycles, 
         global_well_type_cycles/global_num_wanted_cycles,
         f1_score)
-    )
+    
 
 
 def eval_one_epoch(loader, model, size_edge, device, optimizer, criterion):
@@ -183,7 +183,7 @@ def eval_one_epoch(loader, model, size_edge, device, optimizer, criterion):
         global_well_placed_cycles/global_num_wanted_cycles, 
         global_well_type_cycles/global_num_wanted_cycles,
         f1_score)
-    )
+
 
 
 
