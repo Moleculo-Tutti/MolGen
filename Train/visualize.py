@@ -84,7 +84,7 @@ def plot_history_GNN1(csv_file, legend_dict=None):
 
 def plot_history_GNN2(csv_file, legend_dict=None):
     df = pd.read_csv(csv_file)
-    conversion = {0: 'C', 1: 'N', 2: 'O', 3: 'F', 4: 'S', 5: 'Cl', 6:'stop'}
+    conversion = {0: 'aromatic', 1: 'single', 2: 'double', 3: 'triple'}
     # Conversion des colonnes de type string en listes
     df['avg_output_vector'] = df['avg_output_vector'].apply(lambda x: [float(num) for num in re.findall(r'\d+\.\d+', x)])
     df['avg_label_vector'] = df['avg_label_vector'].apply(lambda x: [float(num) for num in re.findall(r'\d+\.\d+', x)])
