@@ -91,11 +91,17 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, prin
         loss_value = total_loss / (data.num_graphs * (progress_bar.last_print_n + 1))
         total_graphs_processed += data.num_graphs
         
+        denominator =global_cycles_created+global_cycles_shouldnt_created+global_num_wanted_cycles
+        if denominator == 0:
+            f1_score = 1
+        else:
+            f1_score = 2 * global_cycles_created / denominator
         if print_bar:
             progress_bar.set_postfix(loss=loss_value, avg_num_output=num_output / total_graphs_processed, avg_num_labels=num_labels / total_graphs_processed,
             pseudo_precision = global_cycles_created/(global_cycles_created+global_cycles_shouldnt_created),  pseudo_recall = global_cycles_created/global_num_wanted_cycles ,
             pseudo_recall_placed = global_well_placed_cycles/global_num_wanted_cycles, pseudo_recall_type = global_well_type_cycles/global_num_wanted_cycles, 
-            f1_score = 2/(1/( global_cycles_created/(global_cycles_created+global_cycles_shouldnt_created))+1/( global_cycles_created/global_num_wanted_cycles)))
+            f1_score = f1_score)
+            
 
     return (
         total_loss / len(loader.dataset),
@@ -105,7 +111,7 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, prin
         global_cycles_created/global_num_wanted_cycles , 
         global_well_placed_cycles/global_num_wanted_cycles, 
         global_well_type_cycles/global_num_wanted_cycles,
-        2/(1/( global_cycles_created/(global_cycles_created+global_cycles_shouldnt_created))+1/( global_cycles_created/global_num_wanted_cycles))
+        f1_score)
     )
 
 
@@ -162,6 +168,11 @@ def eval_one_epoch(loader, model, size_edge, device, optimizer, criterion):
         total_loss += loss.item() * data.num_graphs
         total_graphs_processed += data.num_graphs
 
+        denominator =global_cycles_created+global_cycles_shouldnt_created+global_num_wanted_cycles
+        if denominator == 0:
+            f1_score = 1
+        else:
+            f1_score = 2 * global_cycles_created / denominator
 
     return (
         total_loss / len(loader.dataset),
@@ -171,7 +182,7 @@ def eval_one_epoch(loader, model, size_edge, device, optimizer, criterion):
         global_cycles_created/global_num_wanted_cycles , 
         global_well_placed_cycles/global_num_wanted_cycles, 
         global_well_type_cycles/global_num_wanted_cycles,
-        2/(1/( global_cycles_created/(global_cycles_created+global_cycles_shouldnt_created))+1/( global_cycles_created/global_num_wanted_cycles))
+        f1_score)
     )
 
 
