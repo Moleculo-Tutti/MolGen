@@ -82,9 +82,9 @@ class ModelWithgraph_embedding(torch.nn.Module):
                 self.batch_norm_layers.append(torch.nn.BatchNorm1d(hidden_channels))
             prev_channels = hidden_channels
         if self.size_info:
-            self.fc1 = torch.nn.Linear(hidden_channels_list[-1] + 1, mlp_hidden_channels)
+            self.fc1 = torch.nn.Linear(hidden_channels_list[-1]*2 + 1, mlp_hidden_channels)
         else:
-            self.fc1 = torch.nn.Linear(hidden_channels_list[-1], mlp_hidden_channels)
+            self.fc1 = torch.nn.Linear(hidden_channels_list[-1]*2, mlp_hidden_channels)
         self.fc2 = torch.nn.Linear(mlp_hidden_channels, self.num_classes)
         
 
@@ -117,6 +117,8 @@ class ModelWithgraph_embedding(torch.nn.Module):
         #maybe there is an error with the deice where it has been projected
 
         out = torch.zeros(x.shape[0],self.num_classes)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        out = out.to(device)
         for i in range(x.shape[0]):
             node = x[i]
             graph_idx = batch[i]

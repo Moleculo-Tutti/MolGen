@@ -32,7 +32,7 @@ sys.path.append(parent_dir)
 sys.path.append(parent_parent_dir)
 
 from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_passive_add_feature_GNN3, custom_collate_GNN3
-from Model.GNN3 import ModelWithEdgeFeatures
+from Model.GNN3 import ModelWithEdgeFeatures, ModelWithgraph_embedding
 from Model.metrics import  pseudo_accuracy_metric_gnn3
 
 
@@ -132,9 +132,9 @@ def eval_one_epoch(loader, model, size_edge, device, optimizer, criterion):
         
         optimizer.zero_grad()
         out = model(data)
-
         # Convert node_labels to class indices
         
+
         node_labels = node_labels.to(device)
         mask = mask.to(device)
 
@@ -176,18 +176,28 @@ def eval_one_epoch(loader, model, size_edge, device, optimizer, criterion):
 
 
 
-def train_GNN3(name : str, datapath_train, datapath_val, n_epochs,  encoding_size, GCN_size : list, mlp_size, edge_size = 4, feature_position = True, use_dropout = False, lr = 0.0001 , print_bar = False):
+def train_GNN3(name : str, datapath_train, datapath_val, n_epochs,  encoding_size, GCN_size : list, mlp_size, edge_size = 4, feature_position = True, 
+                use_dropout = False, lr = 0.0001 , print_bar = False, graph_embedding = False, mlp_hidden = 512, num_classes = 5, size_info = False):
 
     dataset_train = ZincSubgraphDatasetStep(data_path = datapath_train, GNN_type=3)
     dataset_val = ZincSubgraphDatasetStep(data_path = datapath_val, GNN_type=3)
     if feature_position :
         loader_train = DataLoader(dataset_train, batch_size=128, shuffle=True, collate_fn=custom_collate_passive_add_feature_GNN3)
         loader_val = DataLoader(dataset_val, batch_size=128, shuffle=True, collate_fn=custom_collate_passive_add_feature_GNN3)
-        model = ModelWithEdgeFeatures(in_channels=encoding_size + 1, hidden_channels_list= GCN_size, edge_channels=edge_size, use_dropout=use_dropout)
+        if graph_embedding:
+            model = ModelWithgraph_embedding(in_channels = encoding_size+1,hidden_channels_list= GCN_size, mlp_hidden_channels= mlp_hidden, 
+                                             edge_channels= edge_size, num_classes= num_classes,size_info= size_info)
+        else:
+            model = ModelWithEdgeFeatures(in_channels=encoding_size + 1, hidden_channels_list= GCN_size, edge_channels=edge_size, use_dropout=use_dropout)
+            
     else :
         loader_train = DataLoader(dataset_train, batch_size=128, shuffle=True, collate_fn=custom_collate_GNN3)
         loader_val = DataLoader(dataset_val, batch_size=128, shuffle=True, collate_fn=custom_collate_GNN3)
-        model = ModelWithEdgeFeatures(in_channels=encoding_size, hidden_channels_list= GCN_size, edge_channels=edge_size, use_dropout=use_dropout)
+        if graph_embedding:
+            model = ModelWithgraph_embedding(in_channels = encoding_size,hidden_channels_list= GCN_size, mlp_hidden_channels= mlp_hidden, 
+                                             edge_channels= edge_size, num_classes= num_classes,size_info= size_info)
+        else:
+            model = ModelWithEdgeFeatures(in_channels=encoding_size , hidden_channels_list= GCN_size, edge_channels=edge_size, use_dropout=use_dropout)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     optimizer = AdamW(model.parameters(), lr=lr)
