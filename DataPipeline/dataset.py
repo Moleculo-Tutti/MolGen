@@ -16,8 +16,11 @@ import os
 from DataPipeline.preprocessing import get_subgraph_with_terminal_nodes, get_subgraph_with_terminal_nodes_step
 
 def add_node_feature_based_on_position(data):
+
+    tensor_size = data.x.size(1)
+
     # Find the index of the 'current_atom' for each graph in the batch
-    current_atom_indices = (data.x[:, 6] == 1).nonzero(as_tuple=True)[0]
+    current_atom_indices = (data.x[:, tensor_size - 1] == 1).nonzero(as_tuple=True)[0]
     
     # Initialize a zero tensor to store the new feature
     new_feature = torch.zeros(data.num_nodes, 1, device=data.x.device)
@@ -90,10 +93,11 @@ class ZincSubgraphDataset(Dataset):
 
 class ZincSubgraphDatasetStep(Dataset):
 
-    def __init__(self, data_path, GNN_type : str):
+    def __init__(self, data_path, GNN_type : str, feature_position : bool = False):
         self.data_list = torch.load(data_path)
         self.encoding_size = self.data_list[0].x.size(1)
         self.GNN_type = GNN_type
+        self.feature_position = feature_position
         if GNN_type >= 2:
             self.impose_edges = True
         else:
@@ -134,9 +138,14 @@ class ZincSubgraphDatasetStep(Dataset):
             subgraph.edge_neighbor = terminal_nodes[1][id_chosen][2]
 
         if self.GNN_type == 3:
-            
+
+            # Put to zero the current node 
+            subgraph.x[id_map[terminal_nodes[0]]][self.encoding_size - 1] = 0
+
             id_chosen = np.random.randint(len(terminal_nodes[1]))
             neighbor = terminal_nodes[1][id_chosen][1]
+            # Put a one to indicate the last node generated
+            neighbor[-1] = 1
             edge_neighbor_attr = terminal_nodes[1][id_chosen][2]
 
             #add neighbor and edge_neighbor to the graph
@@ -153,7 +162,7 @@ class ZincSubgraphDatasetStep(Dataset):
 
             node_features_label = torch.zeros(len(subgraph.x), 5)
 
-            # put ones in the last column of the node_features_label for the terminal node
+            # put ones in the last column of the node_features_label for the terminal node (put stop everywhere)
             node_features_label[:, -1] = 1
 
             if len(terminal_nodes[1][id_chosen][3]) != 0:
@@ -162,6 +171,14 @@ class ZincSubgraphDatasetStep(Dataset):
                     node_features_label[id_map[cycle_neighbor[0]]][-1] = 0
 
             mask = torch.cat((torch.zeros(node1 + 1), torch.ones(len(subgraph.x) - node1 - 1)), dim=0).bool()
+            mask[-1] = False
+
+            if self.feature_position:
+                #Concatenate the mask to the node_features_label
+                opposite_mask = torch.logical_not(mask)
+                opposite_mask[-1] = False
+                opposite_mask[node1] = False
+                subgraph.x = torch.cat((subgraph.x, opposite_mask.unsqueeze(1)), dim=1)
 
             subgraph.cycle_label = node_features_label
             subgraph.mask = mask
@@ -198,7 +215,14 @@ def custom_collate_GNN1(batch):
     return sg_data_batch, terminal_nodes_info_tensor
 
 def custom_collate_passive_add_feature_GNN2(batch):
+    
+    # add a column of zeros to the neighbor of the batch
+
+    for item in batch:
+        item.neighbor = torch.cat([item.neighbor, torch.zeros(1)], dim=0)
+    
     sg_data_list = [item for item in batch]
+    
     terminal_nodes_info_list = [item.edge_neighbor for item in batch]
 
     sg_data_batch = Batch.from_data_list(sg_data_list)
@@ -228,17 +252,6 @@ def custom_collate_GNN3(batch):
     
     return sg_data_batch, cycle_label_tensor, mask_tensor
 
-def custom_collate_passive_add_feature_GNN3(batch):
-    sg_data_list = [item for item in batch]
-    cycle_label_list = [item.cycle_label for item in batch]
-    mask_list = [item.mask for item in batch]
-
-    sg_data_batch = Batch.from_data_list(sg_data_list)
-    cycle_label_tensor = torch.cat(cycle_label_list, dim=0)
-    mask_tensor = torch.cat(mask_list, dim=0)
-
-    feature_sg_data_batch = add_node_feature_based_on_position(sg_data_batch)
-    return feature_sg_data_batch, cycle_label_tensor, mask_tensor
 
 
 def load_compressed_batch(file_path):

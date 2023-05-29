@@ -66,7 +66,7 @@ def get_model_GNN2(encoding_size):
 
 def get_model_GNN3(encoding_size):
     return GNN3(in_channels=encoding_size, 
-                hidden_channels_list=[64, 128, 128, 64, 32, 5], 
+                hidden_channels_list=[16, 32, 64, 128, 64, 32, 16, 5],
                 edge_channels=4, 
                 use_dropout=False)
 
@@ -135,7 +135,7 @@ def one_step(input_graph, queue : list, GNN1, GNN2, GNN3, device):
     prediction = GNN1(graph1.to(device))
 
     # Sample next node from prediction
-
+    print('softmax_GNN1', F.softmax(prediction, dim=1))
     predicted_node = torch.multinomial(F.softmax(prediction, dim=1), 1).item()
     if predicted_node == 6:
         #Stop 
@@ -155,6 +155,7 @@ def one_step(input_graph, queue : list, GNN1, GNN2, GNN3, device):
 
     graph2.neighbor = encoded_predicted_node
     prediction2 = GNN2(graph2.to(device))
+    print('softmax_GNN2', F.softmax(prediction2, dim=1))
     predicted_edge = torch.multinomial(F.softmax(prediction2, dim=1), 1).item()
     encoded_predicted_edge = torch.zeros(prediction2.size(), dtype=torch.float)
     encoded_predicted_edge[0, predicted_edge] = 1
@@ -162,7 +163,8 @@ def one_step(input_graph, queue : list, GNN1, GNN2, GNN3, device):
 
     new_graph = add_edge_or_node_to_graph(input_graph.clone(), current_node, encoded_predicted_edge, new_node_attr = encoded_predicted_node)
     graph3 = new_graph.clone()
-    graph3.x[-1, -1] = 1
+    graph3.x[current_node, -1] = 1
+    print(graph3.x)
     mask = torch.cat((torch.zeros(current_node + 1), torch.ones(len(graph3.x) - current_node - 1)), dim=0).bool()
     mask[-1] = False
     graph3.mask = mask
@@ -171,7 +173,7 @@ def one_step(input_graph, queue : list, GNN1, GNN2, GNN3, device):
     if softmax_prediction3.size(0) == 0:
         #Stop
         return new_graph, queue
-    
+    print('softmax_prediction3', softmax_prediction3)
     selected_edge_distribution, max_index = select_node(softmax_prediction3)
 
 

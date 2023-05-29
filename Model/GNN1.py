@@ -79,7 +79,7 @@ class ModelWithEdgeFeatures(torch.nn.Module):
             # Concatenate size of each graph of the batch 
             num_nodes_per_graph = torch.bincount(data.batch).view(-1, 1).float()
             # Normalize num_node 
-            num_nodes_per_graph = num_nodes_per_graph / num_nodes_per_graph.max()
+            num_nodes_per_graph = num_nodes_per_graph / 40
 
             x = torch.cat((x, num_nodes_per_graph), dim=1)
 
