@@ -75,7 +75,7 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, prin
         # Add softmax to out
         softmax_out = F.softmax(out, dim=1)
 
-        cycles_created, well_placed_cycles , well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles = pseudo_accuracy_metric_gnn3(data,softmax_out,node_labels,mask)        
+        cycles_created, well_placed_cycles , well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles = pseudo_accuracy_metric_gnn3(data,out,node_labels,mask)        
         # Calculate metrics and move tensors to CPU
         num_output += torch.sum(softmax_out[mask], dim=0).detach().cpu()
         num_labels += torch.sum(node_labels[mask], dim=0).detach().cpu()
