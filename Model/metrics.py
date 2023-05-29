@@ -48,8 +48,16 @@ def pseudo_accuracy_metric_gnn3(model_input, model_output, target, mask, random 
         current_graph_output = model_output[start_index:end_index]
         mask_graph = mask[start_index:end_index]
 
-        current_graph_predicted = torch.multinomial(current_graph_output,1)
-        current_graph_predicted_masked = current_graph_predicted[mask_graph]
+        # compute softmax output 
+        current_graph_output_masked = F.softmax(current_graph_output[mask_graph], dim=1)
+        sum_on_first_three_dims = current_graph_output_masked[:, :4].sum(dim=1)
+
+        # Trouver l'indice du node avec la plus grande somme
+        max_index = torch.argmax(sum_on_first_three_dims)
+        # Select in current_graph_output_masked thehighest value 
+
+        vector_predicted = current_graph_output_masked[max_index]
+        prediction= torch.multinomial(vector_predicted, 1)
 
         if torch.sum(current_graph_target[:,:4].max(dim=1)[0]) > 0: 
             # the graph has a cycle
@@ -57,18 +65,18 @@ def pseudo_accuracy_metric_gnn3(model_input, model_output, target, mask, random 
             num_wanted_cycles +=1
         
         
-        if has_cycle and torch.sum(current_graph_predicted_masked < 4) >0 :
+        if has_cycle and prediction < 4 :
             # look if we have predicted one cycle (frist 4  in the vector of 5 ) in this molecul
             cycles_created +=1
-            for i in range(current_graph_predicted_masked.shape[1]):
-                if current_graph_predicted_masked[i] < 4 and torch.argmax(current_graph_target[mask_graph][i])<4:
-                    good_cycles_created += 1
-                    if current_graph_predicted_masked[i] == torch.argmax(current_graph_target[mask_graph][i]):
-                        good_types_cycles_predicted += 1
-        if has_cycle and torch.sum(current_graph_predicted_masked == 4) >0:
+            if torch.argmax(current_graph_target[mask_graph][max_index])<4 :
+                good_cycles_created += 1
+                if prediction == torch.argmax(current_graph_target[mask_graph][max_index]):
+                    good_types_cycles_predicted += 1
+
+        if has_cycle and prediction == 4:
             cycles_not_created +=1
 
-        if not(has_cycle) and torch.sum(current_graph_predicted_masked < 4) >0 :
+        if not(has_cycle) and prediction < 4 :
             cycles_shouldnt_created += 1
 
         has_cycle = False

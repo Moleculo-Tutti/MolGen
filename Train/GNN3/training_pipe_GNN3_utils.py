@@ -96,11 +96,16 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, prin
             f1_score = 1
         else:
             f1_score = 2 * global_cycles_created / denominator
+
+        if global_cycles_created == 0:
+            conditional_precision_placed = 1
+        else:
+            conditional_precision_placed = global_well_placed_cycles/(global_cycles_created)
         if print_bar:
             progress_bar.set_postfix(loss=loss_value, avg_num_output=num_output / total_graphs_processed, avg_num_labels=num_labels / total_graphs_processed,
             pseudo_precision = global_cycles_created/(global_cycles_created+global_cycles_shouldnt_created),  pseudo_recall = global_cycles_created/global_num_wanted_cycles ,
             pseudo_recall_placed = global_well_placed_cycles/global_num_wanted_cycles, pseudo_recall_type = global_well_type_cycles/global_num_wanted_cycles, 
-            f1_score = f1_score)
+            conditional_precision_placed = conditional_precision_placed, f1_score = f1_score)
             
 
     return (
@@ -111,6 +116,7 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, prin
         global_cycles_created/global_num_wanted_cycles , 
         global_well_placed_cycles/global_num_wanted_cycles, 
         global_well_type_cycles/global_num_wanted_cycles,
+        conditional_precision_placed,
         f1_score)
     
 
@@ -173,6 +179,11 @@ def eval_one_epoch(loader, model, size_edge, device, optimizer, criterion):
             f1_score = 1
         else:
             f1_score = 2 * global_cycles_created / denominator
+        
+        if global_cycles_created == 0:
+            conditional_precision_placed = 1
+        else:
+            conditional_precision_placed = global_well_placed_cycles/(global_cycles_created)
 
     return (
         total_loss / len(loader.dataset),
@@ -182,6 +193,7 @@ def eval_one_epoch(loader, model, size_edge, device, optimizer, criterion):
         global_cycles_created/global_num_wanted_cycles , 
         global_well_placed_cycles/global_num_wanted_cycles, 
         global_well_type_cycles/global_num_wanted_cycles,
+        conditional_precision_placed,
         f1_score)
 
 
@@ -222,8 +234,8 @@ def train_GNN3(name : str, datapath_train, datapath_val, n_epochs,  encoding_siz
 
     # Set up the loss function for multiclass 
     criterion = nn.CrossEntropyLoss()
-    training_history = pd.DataFrame(columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector','pseudo_precision', 'pseudo_recall' , 'pseudo_recall_placed', 'pseudo_recall_type', 'f1_score'])
-    eval_history = pd.DataFrame(columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector','pseudo_precision', 'pseudo_recall' , 'pseudo_recall_placed', 'pseudo_recall_type', 'f1_score'])
+    training_history = pd.DataFrame(columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector','pseudo_precision', 'pseudo_recall' , 'pseudo_recall_placed', 'pseudo_recall_type','conditionnal_precision_placed', 'f1_score'])
+    eval_history = pd.DataFrame(columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector','pseudo_precision', 'pseudo_recall' , 'pseudo_recall_placed', 'pseudo_recall_type','conditionnal_precision_placed', 'f1_score'])
 
     directory_path_experience = os.path.join("./experiments", name)
     directory_path_epochs = os.path.join(directory_path_experience,"history_training")
@@ -264,12 +276,12 @@ def train_GNN3(name : str, datapath_train, datapath_val, n_epochs,  encoding_siz
 
     #beginning the epoch
     for epoch in range(0, n_epochs+1):
-        loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, f1_score = train_one_epoch(
+        loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score = train_one_epoch(
             loader_train, model, edge_size, device, optimizer, criterion, print_bar = print_bar)
-        training_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, f1_score]
-        loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, f1_score = eval_one_epoch(
+        training_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type,conditionnal_precision_placed, f1_score]
+        loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type,conditionnal_precision_placed, f1_score  = eval_one_epoch(
             loader_val, model, edge_size, device, optimizer, criterion)
-        eval_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, f1_score]
+        eval_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type,conditionnal_precision_placed, f1_score]
 
     #save the model(all with optimizer step, the loss ) every 5 epochs
 

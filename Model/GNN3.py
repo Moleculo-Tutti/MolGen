@@ -108,7 +108,7 @@ class ModelWithgraph_embedding(torch.nn.Module):
             # Concatenate size of each graph of the batch 
             num_nodes_per_graph = torch.bincount(data.batch).view(-1, 1).float()
             # Normalize num_node 
-            num_nodes_per_graph = num_nodes_per_graph / num_nodes_per_graph.max()
+            num_nodes_per_graph = num_nodes_per_graph / 40
 
             graph_embedd= torch.cat((graph_embedd, num_nodes_per_graph), dim=1)
 
@@ -184,7 +184,7 @@ class ModelWithgraph_embedding_modif(torch.nn.Module):
             # Concatenate size of each graph of the batch 
             num_nodes_per_graph = torch.bincount(data.batch).view(-1, 1).float()
             # Normalize num_node 
-            num_nodes_per_graph = num_nodes_per_graph / num_nodes_per_graph.max()
+            num_nodes_per_graph = num_nodes_per_graph / 40
 
             graph_embedd= torch.cat((graph_embedd, num_nodes_per_graph), dim=1)
         
@@ -194,8 +194,6 @@ class ModelWithgraph_embedding_modif(torch.nn.Module):
         # Two-layer MLP for classification
 
         #maybe there is an error with the deice where it has been projected
-
-
 
         new_input = torch.cat((x,graph_embed_rep), dim = 1)
         node_out = F.relu(self.fc1(new_input))
