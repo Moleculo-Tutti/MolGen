@@ -48,10 +48,17 @@ def pseudo_accuracy_metric_gnn3(model_input, model_output, target, mask, random 
         current_graph_output = model_output[start_index:end_index]
         mask_graph = mask[start_index:end_index]
 
+
+
+
         # compute softmax output 
         current_graph_output_masked = F.softmax(current_graph_output[mask_graph], dim=1)
         sum_on_first_three_dims = current_graph_output_masked[:, :4].sum(dim=1)
 
+
+        # if sum on first three dims is empty return 0
+        if sum_on_first_three_dims.size()[0] == 0:
+            continue
         # Trouver l'indice du node avec la plus grande somme
         max_index = torch.argmax(sum_on_first_three_dims)
         # Select in current_graph_output_masked thehighest value 
