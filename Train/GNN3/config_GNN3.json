@@ -3,10 +3,11 @@
     "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_no_I_Br_P.pt",
     "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_no_I_Br_P.pt",
     "encoding_size": 7,
-    "GCN_size": [32, 64, 128, 256, 128, 64, 32, 5],
+    "GCN_size": [32, 64, 128, 256, 128, 64, 32, 4],
     "edge_size": 4,
     "n_epochs": 100,
     "graph_embedding": false,
     "mlp_hidden": 128,
-    "batch_size": 128
+    "batch_size": 128,
+    "num_workers": 0
 }

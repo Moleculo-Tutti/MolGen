@@ -41,8 +41,8 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, prin
     model.train()
     total_loss = 0
     num_correct = 0
-    num_output = torch.zeros(size_edge+1)  # Already on CPU
-    num_labels = torch.zeros(size_edge+1)  # Already on CPU
+    num_output = torch.zeros(size_edge)  # Already on CPU
+    num_labels = torch.zeros(size_edge)  # Already on CPU
     total_graphs_processed = 0
     global_cycles_created = 0
     global_well_placed_cycles = 0
@@ -71,6 +71,7 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, prin
 
         # Use node_labels_indices with CrossEntropyLoss
         #loss = criterion(out, node_labels, mask)
+
         loss = criterion(out[mask], node_labels[mask])
     
     
@@ -127,8 +128,8 @@ def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False)
     model.eval()
     total_loss = 0
     num_correct = 0
-    num_output = torch.zeros(size_edge + 1)  # Already on CPU
-    num_labels = torch.zeros(size_edge + 1)  # Already on CPU
+    num_output = torch.zeros(size_edge)  # Already on CPU
+    num_labels = torch.zeros(size_edge)  # Already on CPU
     total_graphs_processed = 0
     global_cycles_created = 0
     global_well_placed_cycles = 0
@@ -200,7 +201,7 @@ def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False)
 
 
 def train_GNN3(name : str, datapath_train, datapath_val, n_epochs,  encoding_size, GCN_size : list, mlp_size, edge_size = 4, feature_position = True, 
-                use_dropout = False, lr = 0.0001 , print_bar = False, graph_embedding = False, mlp_hidden = 512, num_classes = 5, size_info = False, batch_size = 128, modif_accelerate = False):
+                use_dropout = False, lr = 0.0001 , print_bar = False, graph_embedding = False, mlp_hidden = 512, num_classes = 4, size_info = False, batch_size = 128, modif_accelerate = False, num_workers = 0):
 
 
     dataset_train = ZincSubgraphDatasetStep(data_path = datapath_train, GNN_type=3, feature_position=feature_position)
@@ -208,8 +209,8 @@ def train_GNN3(name : str, datapath_train, datapath_val, n_epochs,  encoding_siz
     if feature_position :
         encoding_size += 1
     
-    loader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, num_workers=4, collate_fn=custom_collate_GNN3)
-    loader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, num_workers=4, collate_fn=custom_collate_GNN3)
+    loader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, num_workers = num_workers, collate_fn=custom_collate_GNN3)
+    loader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, num_workers = num_workers, collate_fn=custom_collate_GNN3)
 
     if graph_embedding:
             if modif_accelerate :

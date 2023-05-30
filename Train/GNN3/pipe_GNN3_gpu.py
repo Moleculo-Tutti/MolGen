@@ -15,7 +15,7 @@ def main(args):
                          config["n_epochs"], config["encoding_size"], config["GCN_size"], config["edge_size"],
                          feature_position=False, use_dropout=False, lr=0.0001, print_bar=False, 
                          graph_embedding=config["graph_embedding"], mlp_hidden=config["mlp_hidden"], 
-                         batch_size=config["batch_size"], modif_accelerate=True)
+                         batch_size=config["batch_size"], modif_accelerate=True, num_workers=config["num_workers"])
 
 
 if __name__ == '__main__':
