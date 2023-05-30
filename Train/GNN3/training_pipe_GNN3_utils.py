@@ -229,6 +229,7 @@ def train_GNN3(name : str, datapath_train, datapath_val, n_epochs,  encoding_siz
 
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Using device:", device)
     model = model.to(device)
     optimizer = AdamW(model.parameters(), lr=lr)
 
@@ -280,7 +281,7 @@ def train_GNN3(name : str, datapath_train, datapath_val, n_epochs,  encoding_siz
             loader_train, model, edge_size, device, optimizer, criterion, print_bar = print_bar)
         training_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type,conditionnal_precision_placed, f1_score]
         loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type,conditionnal_precision_placed, f1_score  = eval_one_epoch(
-            loader_val, model, edge_size, device, optimizer, criterion, print_bar = print_bar)
+            loader_val, model, edge_size, device, criterion, print_bar = print_bar)
         eval_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type,conditionnal_precision_placed, f1_score]
 
     #save the model(all with optimizer step, the loss ) every 5 epochs
