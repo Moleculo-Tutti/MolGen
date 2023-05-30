@@ -1,5 +1,6 @@
 import pandas as pd
 from rdkit import Chem
+import matplotlib.pyplot as plt
 
 def calculate_uniqueness(batch_smiles_valid):
     batch_smiles_uniq = set(batch_smiles_valid)
@@ -30,3 +31,45 @@ def calculate_validity(batch_smiles):
     
     validity = len(valid_molecules) / len(batch_smiles)
     return validity,valid_molecules
+
+
+def plot_molecule_sizes(smiles_series):
+    molecule_sizes = []
+
+    # Parcourir chaque SMILES dans la série
+    for smiles in smiles_series:
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is not None:
+            # Compter le nombre total d'atomes dans la molécule
+            size = mol.GetNumAtoms()
+            molecule_sizes.append(size)
+
+    # Tracer l'histogramme des tailles de molécules
+    plt.hist(molecule_sizes, bins=20)
+    plt.xlabel('Molecule Size')
+    plt.ylabel('Frequency')
+    plt.title('Molecule Size Distribution')
+    plt.show()
+
+def plot_atom_distribution(smiles_series):
+    atom_counts = []
+
+    # Parcourir chaque SMILES dans la série
+    for smiles in smiles_series:
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is not None:
+            # Compter le nombre d'atomes de chaque type
+            atoms = [atom.GetSymbol() for atom in mol.GetAtoms()]
+            atom_count = dict(pd.Series(atoms).value_counts())
+            atom_counts.append(atom_count)
+
+    # Créer un DataFrame à partir des comptages des atomes
+    atom_df = pd.DataFrame(atom_counts).fillna(0)
+
+    # Tracer l'histogramme de distribution des atomes
+    atom_df.plot(kind='bar', stacked=True)
+    plt.xlabel('Molecule')
+    plt.ylabel('Atom Count')
+    plt.title('Atom Distribution')
+    plt.show()
+
