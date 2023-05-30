@@ -9,5 +9,5 @@
     "graph_embedding": false,
     "mlp_hidden": 128,
     "batch_size": 128,
-    "num_workers": 0
+    "num_workers": 8
 }

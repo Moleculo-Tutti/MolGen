@@ -276,7 +276,7 @@ def train_GNN3(name : str, datapath_train, datapath_val, n_epochs,  encoding_siz
             file.write(line)
 
     #beginning the epoch
-    for epoch in range(0, n_epochs+1):
+    for epoch in tqdm(range(0, n_epochs+1)):
         loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score = train_one_epoch(
             loader_train, model, edge_size, device, optimizer, criterion, print_bar = print_bar)
         training_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type,conditionnal_precision_placed, f1_score]

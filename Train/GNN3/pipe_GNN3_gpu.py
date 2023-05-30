@@ -5,6 +5,9 @@ import torch
 import json
 from visualize import plot_history_GNN3
 
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+
 def main(args):
     # Load config file
     with open(args.config, 'r') as f:
