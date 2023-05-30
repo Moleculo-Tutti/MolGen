@@ -7,3 +7,4 @@
 # Autoriser les fichiers .py et .ipynb
 !*.py
 !*.ipynb
+!*.json
