@@ -12,6 +12,8 @@ from io import BytesIO
 from tqdm import tqdm
 import os
 
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 from DataPipeline.preprocessing import get_subgraph_with_terminal_nodes, get_subgraph_with_terminal_nodes_step
 

@@ -53,7 +53,7 @@ def pseudo_accuracy_metric_gnn3(model_input, model_output, target, mask, random 
 
         # compute softmax output 
         current_graph_output_masked = F.softmax(current_graph_output[mask_graph], dim=1)
-        sum_on_first_three_dims = current_graph_output_masked[:, :4].sum(dim=1)
+        sum_on_first_three_dims = current_graph_output_masked[:, :3].sum(dim=1)
 
 
         # if sum on first three dims is empty return 0
@@ -66,24 +66,24 @@ def pseudo_accuracy_metric_gnn3(model_input, model_output, target, mask, random 
         vector_predicted = current_graph_output_masked[max_index]
         prediction= torch.multinomial(vector_predicted, 1)
 
-        if torch.sum(current_graph_target[:,:4].max(dim=1)[0]) > 0: 
+        if torch.sum(current_graph_target[:,:3].max(dim=1)[0]) > 0: 
             # the graph has a cycle
             has_cycle = True
             num_wanted_cycles +=1
         
         
-        if has_cycle and prediction < 4 :
-            # look if we have predicted one cycle (frist 4  in the vector of 5 ) in this molecul
+        if has_cycle and prediction < 3 :
+            # look if we have predicted one cycle (first 3 in the vector of 4) in this molecul
             cycles_created +=1
-            if torch.argmax(current_graph_target[mask_graph][max_index])<4 :
+            if torch.argmax(current_graph_target[mask_graph][max_index])<3 :
                 good_cycles_created += 1
                 if prediction == torch.argmax(current_graph_target[mask_graph][max_index]):
                     good_types_cycles_predicted += 1
 
-        if has_cycle and prediction == 4:
+        if has_cycle and prediction == 3:
             cycles_not_created +=1
 
-        if not(has_cycle) and prediction < 4 :
+        if not(has_cycle) and prediction < 3 :
             cycles_shouldnt_created += 1
 
         has_cycle = False
