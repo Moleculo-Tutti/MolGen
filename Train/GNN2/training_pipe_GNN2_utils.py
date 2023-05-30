@@ -45,7 +45,10 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, prin
     num_correct_precision = torch.zeros(size_edge)
     count_per_class_recall = torch.zeros(size_edge)
     count_per_class_precision = torch.zeros(size_edge)
-    progress_bar = tqdm_notebook(loader, desc="Training", unit="batch")
+    if print_bar:
+        progress_bar = tqdm_notebook(loader, desc="Training", unit="batch")
+    else:
+        progress_bar = tqdm(loader, desc="Training", unit="batch")
 
     avg_output_vector = np.zeros(size_edge)  # Initialize the average output vector
     avg_label_vector = np.zeros(size_edge)  # Initialize the average label vector
@@ -175,17 +178,17 @@ def eval_one_epoch(loader, model, size_edge, device, optimizer, criterion):
 
 
 
-def train_GNN2(name : str, datapath_train, datapath_val, n_epochs,  encoding_size, GCN_size : list, mlp_size, edge_size = 4, feature_position = True, use_dropout = False, lr = 0.0001 , print_bar = False):
+def train_GNN2(name : str, datapath_train, datapath_val, n_epochs,  encoding_size, GCN_size : list, mlp_size, edge_size = 4, feature_position = True, use_dropout = False, lr = 0.0001 , print_bar = False, batch_size = 128, num_workers = 0):
 
     dataset_train = ZincSubgraphDatasetStep(data_path = datapath_train, GNN_type=2)
     dataset_val = ZincSubgraphDatasetStep(data_path = datapath_val, GNN_type=2)
     if feature_position :
-        loader_train = DataLoader(dataset_train, batch_size=128, shuffle=True, collate_fn=custom_collate_passive_add_feature_GNN2)
-        loader_val = DataLoader(dataset_val, batch_size=128, shuffle=True, collate_fn=custom_collate_passive_add_feature_GNN2)
+        loader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, collate_fn=custom_collate_passive_add_feature_GNN2, num_workers=num_workers)
+        loader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, collate_fn=custom_collate_passive_add_feature_GNN2, num_workers=num_workers)
         model = ModelWithEdgeFeatures(in_channels=encoding_size + 1, hidden_channels_list= GCN_size, mlp_hidden_channels=mlp_size, edge_channels=edge_size, num_classes=edge_size, use_dropout=use_dropout)
     else :
-        loader_train = DataLoader(dataset_train, batch_size=128, shuffle=True, collate_fn=custom_collate_GNN2)
-        loader_val = DataLoader(dataset_val, batch_size=128, shuffle=True, collate_fn=custom_collate_GNN2)
+        loader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, collate_fn=custom_collate_GNN2, num_workers=num_workers)
+        loader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, collate_fn=custom_collate_GNN2, num_workers=num_workers)
         model = ModelWithEdgeFeatures(in_channels=encoding_size, hidden_channels_list= GCN_size, mlp_hidden_channels=mlp_size, edge_channels=edge_size, num_classes=edge_size, use_dropout=use_dropout)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
