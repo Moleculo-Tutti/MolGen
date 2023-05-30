@@ -50,10 +50,12 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, prin
     global_cycles_missed = 0
     global_cycles_shouldnt_created = 0
     global_num_wanted_cycles = 0
-    progress_bar = tqdm_notebook(loader, desc="Training", unit="batch")
 
+    if print_bar:
+        progress_bar = tqdm_notebook(loader, desc="Training", unit="batch")
+    else:
+        progress_bar = tqdm(loader, desc="Training", unit="batch")
     
-
     for batch_idx, batch in enumerate(progress_bar):
         data = batch[0].to(device)
         node_labels = batch[1].to(device)
@@ -121,78 +123,75 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, prin
     
 
 
-def eval_one_epoch(loader, model, size_edge, device, optimizer, criterion):
+def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False):
     model.eval()
     total_loss = 0
     num_correct = 0
-    num_output = torch.zeros(size_edge+1)  # Already on CPU
-    num_labels = torch.zeros(size_edge+1)  # Already on CPU
+    num_output = torch.zeros(size_edge + 1)  # Already on CPU
+    num_labels = torch.zeros(size_edge + 1)  # Already on CPU
     total_graphs_processed = 0
     global_cycles_created = 0
     global_well_placed_cycles = 0
-    global_well_type_cycles =0
+    global_well_type_cycles = 0
     global_cycles_missed = 0
     global_cycles_shouldnt_created = 0
     global_num_wanted_cycles = 0
-    progress_bar = tqdm_notebook(loader, desc="Training", unit="batch")
 
-    
+    if print_bar:
+        progress_bar = tqdm_notebook(loader, desc="Evaluating", unit="batch")
+    else:
+        progress_bar = tqdm(loader, desc="Evaluating", unit="batch")
 
-    for batch_idx, batch in enumerate(progress_bar):
-        data = batch[0].to(device)
-        node_labels = batch[1].to(device)
-        mask = batch[2].to(device)
-        
-        optimizer.zero_grad()
-        out = model(data)
-        # Convert node_labels to class indices
-        
+    with torch.no_grad():
+        for batch_idx, batch in enumerate(progress_bar):
+            data = batch[0].to(device)
+            node_labels = batch[1].to(device)
+            mask = batch[2].to(device)
 
-        node_labels = node_labels.to(device)
-        mask = mask.to(device)
+            out = model(data)
 
-        # Use node_labels_indices with CrossEntropyLoss
-        #loss = criterion(out, node_labels, mask)
-        loss = criterion(out[mask], node_labels[mask])
-    
-    
-        # Add softmax to out
-        softmax_out = F.softmax(out, dim=1)
+            node_labels = node_labels.to(device)
+            mask = mask.to(device)
 
-        cycles_created, well_placed_cycles , well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles = pseudo_accuracy_metric_gnn3(data,out,node_labels,mask)        
-        # Calculate metrics and move tensors to CPU
-        num_output += torch.sum(softmax_out[mask], dim=0).detach().cpu()
-        num_labels += torch.sum(node_labels[mask], dim=0).detach().cpu()
-        global_cycles_created +=cycles_created
-        global_well_placed_cycles += well_placed_cycles
-        global_well_type_cycles += well_type_cycles
-        global_cycles_missed += cycles_missed
-        global_cycles_shouldnt_created += cycles_shouldnt_created
-        global_num_wanted_cycles += num_wanted_cycles
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.item() * data.num_graphs
-        total_graphs_processed += data.num_graphs
+            loss = criterion(out[mask], node_labels[mask])
 
-        denominator =global_cycles_created+global_cycles_shouldnt_created+global_num_wanted_cycles
-        if denominator == 0:
-            f1_score = 1
-        else:
-            f1_score = 2 * global_cycles_created / denominator
-        
-        if global_cycles_created == 0:
-            conditional_precision_placed = 1
-        else:
-            conditional_precision_placed = global_well_placed_cycles/(global_cycles_created)
+            # Add softmax to out
+            softmax_out = F.softmax(out, dim=1)
+
+            cycles_created, well_placed_cycles, well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles = pseudo_accuracy_metric_gnn3(
+                data, out, node_labels, mask)
+
+            num_output += torch.sum(softmax_out[mask], dim=0).detach().cpu()
+            num_labels += torch.sum(node_labels[mask], dim=0).detach().cpu()
+            global_cycles_created += cycles_created
+            global_well_placed_cycles += well_placed_cycles
+            global_well_type_cycles += well_type_cycles
+            global_cycles_missed += cycles_missed
+            global_cycles_shouldnt_created += cycles_shouldnt_created
+            global_num_wanted_cycles += num_wanted_cycles
+
+            total_loss += loss.item() * data.num_graphs
+            total_graphs_processed += data.num_graphs
+
+            denominator = global_cycles_created + global_cycles_shouldnt_created + global_num_wanted_cycles
+            if denominator == 0:
+                f1_score = 1
+            else:
+                f1_score = 2 * global_cycles_created / denominator
+
+            if global_cycles_created == 0:
+                conditional_precision_placed = 1
+            else:
+                conditional_precision_placed = global_well_placed_cycles / (global_cycles_created)
 
     return (
         total_loss / len(loader.dataset),
         num_output / total_graphs_processed,
-        num_labels / total_graphs_processed, 
-        global_cycles_created/(global_cycles_created+global_cycles_shouldnt_created), 
-        global_cycles_created/global_num_wanted_cycles , 
-        global_well_placed_cycles/global_num_wanted_cycles, 
-        global_well_type_cycles/global_num_wanted_cycles,
+        num_labels / total_graphs_processed,
+        global_cycles_created / (global_cycles_created + global_cycles_shouldnt_created),
+        global_cycles_created / global_num_wanted_cycles,
+        global_well_placed_cycles / global_num_wanted_cycles,
+        global_well_type_cycles / global_num_wanted_cycles,
         conditional_precision_placed,
         f1_score)
 
@@ -209,8 +208,8 @@ def train_GNN3(name : str, datapath_train, datapath_val, n_epochs,  encoding_siz
     if feature_position :
         encoding_size += 1
     
-    loader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, collate_fn=custom_collate_GNN3)
-    loader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=True, collate_fn=custom_collate_GNN3)
+    loader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, num_workers=4, collate_fn=custom_collate_GNN3)
+    loader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, num_workers=4, collate_fn=custom_collate_GNN3)
 
     if graph_embedding:
             if modif_accelerate :
@@ -280,7 +279,7 @@ def train_GNN3(name : str, datapath_train, datapath_val, n_epochs,  encoding_siz
             loader_train, model, edge_size, device, optimizer, criterion, print_bar = print_bar)
         training_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type,conditionnal_precision_placed, f1_score]
         loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type,conditionnal_precision_placed, f1_score  = eval_one_epoch(
-            loader_val, model, edge_size, device, optimizer, criterion)
+            loader_val, model, edge_size, device, optimizer, criterion, print_bar = print_bar)
         eval_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type,conditionnal_precision_placed, f1_score]
 
     #save the model(all with optimizer step, the loss ) every 5 epochs

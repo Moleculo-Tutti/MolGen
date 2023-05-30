@@ -65,8 +65,8 @@ def get_model_GNN2(encoding_size):
                 use_dropout=False)
 
 def get_model_GNN3(encoding_size):
-    return GNN3(in_channels=encoding_size, 
-                hidden_channels_list=[16, 32, 64, 128, 64, 32, 16, 5],
+    return GNN3(in_channels=encoding_size + 1, 
+                hidden_channels_list=[32, 64, 128, 256, 128, 64, 32, 5],
                 edge_channels=4, 
                 use_dropout=False)
 
@@ -161,7 +161,12 @@ def one_step(input_graph, queue : list, GNN1, GNN2, GNN3, device):
 
     new_graph = add_edge_or_node_to_graph(input_graph.clone(), current_node, encoded_predicted_edge, new_node_attr = encoded_predicted_node)
     graph3 = new_graph.clone()
-    graph3.x[current_node, -1] = 1
+    # Add a one of the last node that are going to possibly bond to another node
+    graph3.x[-1, -1] = 1
+    #Add a new column indicating the nodes that have been finalized
+    graph3.x = torch.cat([graph3.x, torch.zeros(graph3.x.size(0), 1)], dim=1)
+    graph3.x[0:current_node, -1] = 1
+
     mask = torch.cat((torch.zeros(current_node + 1), torch.ones(len(graph3.x) - current_node - 1)), dim=0).bool()
     mask[-1] = False
     graph3.mask = mask
