@@ -35,9 +35,9 @@ def main():
     X_train, X_val = train_test_split(X_train_val, test_size=0.1111, random_state=42)
 
     # Save data sets into files
-    torch.save(X_train, 'preprocessed_graph_train_no_I_Br_P.pt')
-    torch.save(X_val, 'preprocessed_graph_val_no_I_Br_P.pt')
-    torch.save(X_test, 'preprocessed_graph_test_no_I_Br_P.pt')
+    torch.save(X_train, 'data/preprocessed_graph_train_no_I_Br_P.pt')
+    torch.save(X_val, 'data/preprocessed_graph_val_no_I_Br_P.pt')
+    torch.save(X_test, 'data/preprocessed_graph_test_no_I_Br_P.pt')
 
 if __name__ == "__main__":
     main()
