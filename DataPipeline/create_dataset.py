@@ -6,7 +6,7 @@ from path import Path
 
 
 from sklearn.model_selection import train_test_split
-from DataPipeline.preprocessing import process_encode_graph
+from preprocessing import process_encode_graph
 
 csv_path = Path(".\data") / "rndm_zinc_drugs_clean_3.csv"
 
