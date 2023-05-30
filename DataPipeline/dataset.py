@@ -180,6 +180,9 @@ class ZincSubgraphDatasetStep(Dataset):
                 opposite_mask[node1] = False
                 subgraph.x = torch.cat((subgraph.x, opposite_mask.unsqueeze(1)), dim=1)
 
+            #remove the forth column of the node_features_label and keep the last one
+            node_features_label = node_features_label[:, [0, 1, 2, 4]]
+
             subgraph.cycle_label = node_features_label
             subgraph.mask = mask
             subgraph.terminal_node_info = terminal_nodes

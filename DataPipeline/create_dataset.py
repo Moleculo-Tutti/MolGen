@@ -8,7 +8,7 @@ from path import Path
 from sklearn.model_selection import train_test_split
 from preprocessing import process_encode_graph
 
-csv_path = Path(".\data") / "rndm_zinc_drugs_clean_3.csv"
+csv_path = Path("./data") / "rndm_zinc_drugs_clean_3.csv"
 
 zinc_df = pd.read_csv(csv_path)
 
