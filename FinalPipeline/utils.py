@@ -3,13 +3,18 @@ import torch
 import torch_geometric
 
 import torch.nn.functional as F
+import sys
+import os
 
-from MolGen.DataPipeline.preprocessing import process_encode_graph, get_subgraph_with_terminal_nodes_step
-from MolGen.DataPipeline.dataset import add_node_feature_based_on_position
-from MolGen.DataPipeline.preprocessing import node_encoder
-from MolGen.Model.GNN1 import ModelWithEdgeFeatures as GNN1
-from MolGen.Model.GNN2 import ModelWithEdgeFeatures as GNN2
-from MolGen.Model.GNN3 import ModelWithEdgeFeatures as GNN3
+cwd = os.getcwd()
+parent_dir = os.path.dirname(cwd)
+sys.path.append(parent_dir)
+
+from DataPipeline.preprocessing import process_encode_graph, get_subgraph_with_terminal_nodes_step
+from DataPipeline.preprocessing import node_encoder
+from Model.GNN1 import ModelWithEdgeFeatures as GNN1
+from Model.GNN2 import ModelWithEdgeFeatures as GNN2
+from Model.GNN3 import ModelWithEdgeFeatures as GNN3
 
 
 def sample_random_subgraph_ZINC(pd_dataframe, start_size):
@@ -36,7 +41,7 @@ def create_torch_graph_from_one_atom(atom):
 
     atom_attribute = node_encoder(num_atom, encoding_option='reduced')
     # Create graph
-    graph = torch_geometric.data.Data(x=atom_attribute.view(1, -1), edge_index=torch.tensor([[], []], dtype=torch.long), edge_attr=torch.tensor([[]], dtype=torch.float))
+    graph = torch_geometric.data.Data(x=atom_attribute.view(1, -1), edge_index=torch.empty((2, 0), dtype=torch.long), edge_attr=torch.empty((0, 4)))
 
     return graph
 
@@ -54,7 +59,8 @@ def get_model_GNN1(encoding_size):
                 mlp_hidden_channels=512, 
                 edge_channels=4, 
                 num_classes=encoding_size, 
-                use_dropout=False)
+                use_dropout=False,
+                size_info=False)
 
 def get_model_GNN2(encoding_size):
     return GNN2(in_channels=encoding_size, 
@@ -121,73 +127,75 @@ def select_node(tensor):
     return tensor[max_index], max_index
 
 def one_step(input_graph, queue : list, GNN1, GNN2, GNN3, device):
-    current_node = queue[0]
 
-    graph1 = input_graph.clone()
-    graph1.x[current_node, -1] = 1
-    # add one column to graph1.x
+    with torch.no_grad():
+        current_node = queue[0]
 
-    graph1.x = torch.cat([graph1.x, torch.zeros(graph1.x.size(0), 1)], dim=1)
-    
-    graph1.x[0:current_node, -1] = 1
+        graph1 = input_graph.clone()
+        graph1.x[current_node, -1] = 1
+        # add one column to graph1.x
 
-    prediction = GNN1(graph1.to(device))
+        graph1.x = torch.cat([graph1.x, torch.zeros(graph1.x.size(0), 1)], dim=1)
+        
+        graph1.x[0:current_node, -1] = 1
 
-    # Sample next node from prediction
+        prediction = GNN1(graph1.to(device))
 
-    predicted_node = torch.multinomial(F.softmax(prediction, dim=1), 1).item()
-    if predicted_node == 6:
-        #Stop 
-        queue.pop(0)
-        return input_graph, queue
+        # Sample next node from prediction
 
-    # Encode next node
-    encoded_predicted_node = torch.zeros(prediction.size(), dtype=torch.float)
-    encoded_predicted_node[0, predicted_node] = 1
+        predicted_node = torch.multinomial(F.softmax(prediction, dim=1), 1).item()
+        if predicted_node == 6:
+            #Stop 
+            queue.pop(0)
+            return input_graph, queue
 
-    queue.append(graph1.x.size(0)) # indexing starts at 0
+        # Encode next node
+        encoded_predicted_node = torch.zeros(prediction.size(), dtype=torch.float)
+        encoded_predicted_node[0, predicted_node] = 1
 
-    # GNN2
+        queue.append(graph1.x.size(0)) # indexing starts at 0
 
-    graph2 = input_graph.clone()
-    graph2.x[current_node, -1] = 1
+        # GNN2
 
-    graph2.neighbor = encoded_predicted_node
-    prediction2 = GNN2(graph2.to(device))
-    predicted_edge = torch.multinomial(F.softmax(prediction2, dim=1), 1).item()
-    encoded_predicted_edge = torch.zeros(prediction2.size(), dtype=torch.float)
-    encoded_predicted_edge[0, predicted_edge] = 1
-    # GNN3
+        graph2 = input_graph.clone()
+        graph2.x[current_node, -1] = 1
 
-    new_graph = add_edge_or_node_to_graph(input_graph.clone(), current_node, encoded_predicted_edge, new_node_attr = encoded_predicted_node)
-    graph3 = new_graph.clone()
-    # Add a one of the last node that are going to possibly bond to another node
-    graph3.x[-1, -1] = 1
-    #Add a new column indicating the nodes that have been finalized
-    graph3.x = torch.cat([graph3.x, torch.zeros(graph3.x.size(0), 1)], dim=1)
-    graph3.x[0:current_node, -1] = 1
+        graph2.neighbor = encoded_predicted_node
+        prediction2 = GNN2(graph2.to(device))
+        predicted_edge = torch.multinomial(F.softmax(prediction2, dim=1), 1).item()
+        encoded_predicted_edge = torch.zeros(prediction2.size(), dtype=torch.float)
+        encoded_predicted_edge[0, predicted_edge] = 1
+        # GNN3
 
-    mask = torch.cat((torch.zeros(current_node + 1), torch.ones(len(graph3.x) - current_node - 1)), dim=0).bool()
-    mask[-1] = False
-    graph3.mask = mask
-    prediction3 = GNN3(graph3.to(device))
-    softmax_prediction3 = F.softmax(prediction3, dim=1)[graph3.mask]
-    if softmax_prediction3.size(0) == 0:
-        #Stop
-        return new_graph, queue
-    selected_edge_distribution, max_index = select_node(softmax_prediction3)
+        new_graph = add_edge_or_node_to_graph(input_graph.clone(), current_node, encoded_predicted_edge, new_node_attr = encoded_predicted_node)
+        graph3 = new_graph.clone()
+        # Add a one of the last node that are going to possibly bond to another node
+        graph3.x[-1, -1] = 1
+        #Add a new column indicating the nodes that have been finalized
+        graph3.x = torch.cat([graph3.x, torch.zeros(graph3.x.size(0), 1)], dim=1)
+        graph3.x[0:current_node, -1] = 1
 
-
-    #sample edge
-    predicted_edge = torch.multinomial(selected_edge_distribution, 1).item()
-    
-    if predicted_edge == 4:
-        #Stop
-        return new_graph, queue
-    
-    encoded_predicted_edge = torch.zeros(prediction2.size(), dtype=torch.float)
-    encoded_predicted_edge[0, predicted_edge] = 1
+        mask = torch.cat((torch.zeros(current_node + 1), torch.ones(len(graph3.x) - current_node - 1)), dim=0).bool()
+        mask[-1] = False
+        graph3.mask = mask
+        prediction3 = GNN3(graph3.to(device))
+        softmax_prediction3 = F.softmax(prediction3, dim=1)[graph3.mask]
+        if softmax_prediction3.size(0) == 0:
+            #Stop
+            return new_graph, queue
+        selected_edge_distribution, max_index = select_node(softmax_prediction3)
 
 
-    output_graph = add_edge_or_node_to_graph(new_graph, graph1.x.size(0), encoded_predicted_edge, other_node=current_node + max_index+1)
-    return output_graph, queue
+        #sample edge
+        predicted_edge = torch.multinomial(selected_edge_distribution, 1).item()
+        
+        if predicted_edge == 4:
+            #Stop
+            return new_graph, queue
+        
+        encoded_predicted_edge = torch.zeros(prediction2.size(), dtype=torch.float)
+        encoded_predicted_edge[0, predicted_edge] = 1
+
+
+        output_graph = add_edge_or_node_to_graph(new_graph, graph1.x.size(0), encoded_predicted_edge, other_node=current_node + max_index+1)
+        return output_graph, queue
