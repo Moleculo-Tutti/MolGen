@@ -1,5 +1,5 @@
 {
-    "name": "GNN1_500_big_512_size",
+    "name": "GNN2_500_big",
     "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_no_I_Br_P.pt",
     "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_no_I_Br_P.pt",
     "encoding_size": 7,
@@ -8,6 +8,5 @@
     "n_epochs": 500,
     "mlp_size": 512,
     "batch_size": 128,
-    "use_size": true,
     "num_workers": 16
 }

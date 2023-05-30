@@ -159,17 +159,17 @@ def eval_one_epoch(loader, model, encoding_size, device, optimizer, criterion):
 
 
 
-def train_GNN1(name : str, datapath_train, datapath_val, n_epochs,  encoding_size, GCN_size : list, mlp_size, edge_size, feature_position = True, use_dropout = False, lr = 0.0001 , print_bar = False, num_workers = 0, batch_size = 128):
+def train_GNN1(name : str, datapath_train, datapath_val, n_epochs,  encoding_size, GCN_size : list, mlp_size, edge_size, feature_position = True, use_dropout = False, lr = 0.0001 , print_bar = False, num_workers = 0, batch_size = 128, use_size = True):
     dataset_train = ZincSubgraphDatasetStep(data_path = datapath_train, GNN_type=1)
     dataset_val = ZincSubgraphDatasetStep(data_path = datapath_val, GNN_type=1)
     if feature_position :
         loader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, num_workers = num_workers, collate_fn=custom_collate_passive_add_feature)
         loader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, num_workers = num_workers, collate_fn=custom_collate_passive_add_feature)
-        model = ModelWithEdgeFeatures(in_channels=encoding_size + 1, hidden_channels_list= GCN_size, mlp_hidden_channels=mlp_size, edge_channels=edge_size, num_classes=encoding_size, use_dropout=use_dropout)
+        model = ModelWithEdgeFeatures(in_channels=encoding_size + 1, hidden_channels_list= GCN_size, mlp_hidden_channels=mlp_size, edge_channels=edge_size, num_classes=encoding_size, use_dropout=use_dropout, size_info=use_size)
     else :
         loader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, num_workers = num_workers, collate_fn=custom_collate_GNN1)
         loader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, num_workers = num_workers, collate_fn=custom_collate_GNN1)
-        model = ModelWithEdgeFeatures(in_channels=encoding_size, hidden_channels_list= GCN_size, mlp_hidden_channels=mlp_size, edge_channels=edge_size, num_classes=encoding_size, use_dropout=use_dropout)
+        model = ModelWithEdgeFeatures(in_channels=encoding_size, hidden_channels_list= GCN_size, mlp_hidden_channels=mlp_size, edge_channels=edge_size, num_classes=encoding_size, use_dropout=use_dropout, size_info=use_size)
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Training on {device}")
@@ -219,7 +219,7 @@ def train_GNN1(name : str, datapath_train, datapath_val, n_epochs,  encoding_siz
             file.write(line)
 
     #beginning the epoch
-    for epoch in range(0, n_epochs+1):
+    for epoch in tqdm(range(0, n_epochs+1)):
         loss, avg_label_vector, avg_output_vector, avg_correct, avg_correct_precision, avg_correct_recall = train_one_epoch(
             loader_train, model, encoding_size, device, optimizer, criterion, print_bar = print_bar)
         training_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, avg_correct, avg_correct_precision, avg_correct_recall]

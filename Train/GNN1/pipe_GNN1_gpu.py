@@ -24,6 +24,7 @@ def main(args):
                          edge_size = config["edge_size"],
                          batch_size = config["batch_size"],
                          num_workers = config["num_workers"],
+                         use_size= config["use_size"],
                          feature_position = True, 
                          use_dropout = False, 
                          lr = 0.0001 , 

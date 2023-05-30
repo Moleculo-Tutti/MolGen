@@ -83,13 +83,15 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, prin
         count_per_class_recall += recall_output[1]
         count_per_class_precision += precision_output[1]
 
+        total_graphs_processed += data.num_graphs
+
         current_avg_output_vector = avg_output_vector / total_graphs_processed
         current_avg_label_vector = avg_label_vector / total_graphs_processed
         
         # Update the average output vector
         avg_output_vector += out.detach().cpu().numpy().mean(axis=0) * data.num_graphs
         avg_label_vector += edge_infos.detach().cpu().numpy().mean(axis=0) * data.num_graphs
-        total_graphs_processed += data.num_graphs
+        
         current_avg_output_vector = avg_output_vector / total_graphs_processed
         current_avg_label_vector = avg_label_vector / total_graphs_processed
         avg_correct = num_correct / total_graphs_processed
@@ -155,13 +157,15 @@ def eval_one_epoch(loader, model, size_edge, device, optimizer, criterion):
         count_per_class_recall += recall_output[1]
         count_per_class_precision += precision_output[1]
 
+        total_graphs_processed += data.num_graphs
+
         current_avg_output_vector = avg_output_vector / total_graphs_processed
         current_avg_label_vector = avg_label_vector / total_graphs_processed
         
         # Update the average output vector
         avg_output_vector += out.detach().cpu().numpy().mean(axis=0) * data.num_graphs
         avg_label_vector += edge_infos.detach().cpu().numpy().mean(axis=0) * data.num_graphs
-        total_graphs_processed += data.num_graphs
+        
         current_avg_output_vector = avg_output_vector / total_graphs_processed
         current_avg_label_vector = avg_label_vector / total_graphs_processed
         avg_correct = num_correct / total_graphs_processed
@@ -236,7 +240,7 @@ def train_GNN2(name : str, datapath_train, datapath_val, n_epochs,  encoding_siz
             file.write(line)
 
     #beginning the epoch
-    for epoch in range(0, n_epochs+1):
+    for epoch in tqdm(range(0, n_epochs+1)):
         loss, avg_label_vector, avg_output_vector, avg_correct, avg_correct_precision, avg_correct_recall = train_one_epoch(
             loader_train, model, edge_size, device, optimizer, criterion, print_bar = print_bar)
         training_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, avg_correct, avg_correct_precision, avg_correct_recall]

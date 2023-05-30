@@ -36,7 +36,7 @@ class CustomMessagePassingLayer(MessagePassing):
         return self.lin(x)
 
 class ModelWithEdgeFeatures(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels_list, mlp_hidden_channels, edge_channels, num_classes=10, use_dropout=True, use_batchnorm=True, size_info = False):
+    def __init__(self, in_channels, hidden_channels_list, mlp_hidden_channels, edge_channels, num_classes=10, use_dropout=True, use_batchnorm=True, size_info = True):
         torch.manual_seed(12345)
         super(ModelWithEdgeFeatures, self).__init__()
 
