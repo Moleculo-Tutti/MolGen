@@ -1,9 +1,6 @@
-from training_pipe_GNN1_utils import train_GNN1
-from pathlib import Path
+from training_pipe_GNN1_utils import TrainGNN1
 import argparse
-import torch
 import json
-from visualize import plot_history_GNN3
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -14,7 +11,8 @@ def main(args):
         config = json.load(f)
 
     # Call the train_GNN1 function with the provided arguments
-    results = train_GNN1(config)
+    TrainingGNN1 = TrainGNN1(config)
+    TrainingGNN1.train()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

@@ -37,7 +37,7 @@ from Model.GNN3 import ModelWithEdgeFeatures, ModelWithgraph_embedding, ModelWit
 from Model.metrics import  pseudo_accuracy_metric_gnn3
 
 
-def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, print_bar = False):
+def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoch_metric, print_bar = False):
     model.train()
     total_loss = 0
     num_correct = 0
@@ -46,7 +46,7 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, prin
     total_graphs_processed = 0
     global_cycles_created = 0
     global_well_placed_cycles = 0
-    global_well_type_cycles =0
+    global_well_type_cycles = 0
     global_cycles_missed = 0
     global_cycles_shouldnt_created = 0
     global_num_wanted_cycles = 0
@@ -57,6 +57,7 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, prin
         progress_bar = tqdm(loader, desc="Training", unit="batch")
     
     for batch_idx, batch in enumerate(progress_bar):
+
         data = batch[0].to(device)
         node_labels = batch[1].to(device)
         mask = batch[2].to(device)
@@ -74,57 +75,63 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, prin
 
         loss = criterion(out[mask], node_labels[mask])
     
-    
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.item() * data.num_graphs
         # Add softmax to out
         softmax_out = F.softmax(out, dim=1)
 
-        cycles_created, well_placed_cycles , well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles = pseudo_accuracy_metric_gnn3(data,out,node_labels,mask)        
-        # Calculate metrics and move tensors to CPU
-        num_output += torch.sum(softmax_out[mask], dim=0).detach().cpu()
-        num_labels += torch.sum(node_labels[mask], dim=0).detach().cpu()
-        global_cycles_created +=cycles_created
-        global_well_placed_cycles += well_placed_cycles
-        global_well_type_cycles += well_type_cycles
-        global_cycles_missed += cycles_missed
-        global_cycles_shouldnt_created += cycles_shouldnt_created
-        global_num_wanted_cycles += num_wanted_cycles
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.item() * data.num_graphs
-        loss_value = total_loss / (data.num_graphs * (progress_bar.last_print_n + 1))
-        total_graphs_processed += data.num_graphs
-        
-        denominator =global_cycles_created+global_cycles_shouldnt_created+global_num_wanted_cycles
-        if denominator == 0:
-            f1_score = 1
-        else:
-            f1_score = 2 * global_cycles_created / denominator
+        if epoch_metric:
 
-        if global_cycles_created == 0:
-            conditional_precision_placed = 1
-        else:
-            conditional_precision_placed = global_well_placed_cycles/(global_cycles_created)
-        if print_bar:
-            progress_bar.set_postfix(loss=loss_value, avg_num_output=num_output / total_graphs_processed, avg_num_labels=num_labels / total_graphs_processed,
-            pseudo_precision = global_cycles_created/(global_cycles_created+global_cycles_shouldnt_created),  pseudo_recall = global_cycles_created/global_num_wanted_cycles ,
-            pseudo_recall_placed = global_well_placed_cycles/global_num_wanted_cycles, pseudo_recall_type = global_well_type_cycles/global_num_wanted_cycles, 
-            conditional_precision_placed = conditional_precision_placed, f1_score = f1_score)
+            cycles_created, well_placed_cycles , well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles = pseudo_accuracy_metric_gnn3(data,out,node_labels,mask)        
+            # Calculate metrics and move tensors to CPU
+            num_output += torch.sum(softmax_out[mask], dim=0).detach().cpu()
+            num_labels += torch.sum(node_labels[mask], dim=0).detach().cpu()
+            global_cycles_created +=cycles_created
+            global_well_placed_cycles += well_placed_cycles
+            global_well_type_cycles += well_type_cycles
+            global_cycles_missed += cycles_missed
+            global_cycles_shouldnt_created += cycles_shouldnt_created
+            global_num_wanted_cycles += num_wanted_cycles
             
+            
+            loss_value = total_loss / (data.num_graphs * (progress_bar.last_print_n + 1))
+            total_graphs_processed += data.num_graphs
+            
+            denominator =global_cycles_created+global_cycles_shouldnt_created+global_num_wanted_cycles
+            if denominator == 0:
+                f1_score = 1
+            else:
+                f1_score = 2 * global_cycles_created / denominator
 
-    return (
-        total_loss / len(loader.dataset),
-        num_output / total_graphs_processed,
-        num_labels / total_graphs_processed, 
-        global_cycles_created/(global_cycles_created+global_cycles_shouldnt_created), 
-        global_cycles_created/global_num_wanted_cycles , 
-        global_well_placed_cycles/global_num_wanted_cycles, 
-        global_well_type_cycles/global_num_wanted_cycles,
-        conditional_precision_placed,
-        f1_score)
+            if global_cycles_created == 0:
+                conditional_precision_placed = 1
+            else:
+                conditional_precision_placed = global_well_placed_cycles/(global_cycles_created)
+            if print_bar:
+                progress_bar.set_postfix(loss=loss_value, avg_num_output=num_output / total_graphs_processed, avg_num_labels=num_labels / total_graphs_processed,
+                pseudo_precision = global_cycles_created/(global_cycles_created+global_cycles_shouldnt_created),  pseudo_recall = global_cycles_created/global_num_wanted_cycles ,
+                pseudo_recall_placed = global_well_placed_cycles/global_num_wanted_cycles, pseudo_recall_type = global_well_type_cycles/global_num_wanted_cycles, 
+                conditional_precision_placed = conditional_precision_placed, f1_score = f1_score)
+            
+    if epoch_metric:
+        return (
+            total_loss / len(loader.dataset),
+            num_output / total_graphs_processed,
+            num_labels / total_graphs_processed, 
+            global_cycles_created/(global_cycles_created+global_cycles_shouldnt_created), 
+            global_cycles_created/global_num_wanted_cycles , 
+            global_well_placed_cycles/global_num_wanted_cycles, 
+            global_well_type_cycles/global_num_wanted_cycles,
+            conditional_precision_placed,
+            f1_score)
     
+    else:
+        return total_loss / len(loader.dataset), None, None, None, None, None, None, None, None
 
 
-def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False):
+def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False, val_metric_size=1):
     model.eval()
     total_loss = 0
     num_correct = 0
@@ -143,47 +150,49 @@ def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False)
     else:
         progress_bar = tqdm(loader, desc="Evaluating", unit="batch")
 
-    with torch.no_grad():
-        for batch_idx, batch in enumerate(progress_bar):
-            data = batch[0].to(device)
-            node_labels = batch[1].to(device)
-            mask = batch[2].to(device)
+    for i in tqdm(range(val_metric_size)):
 
-            out = model(data)
+        with torch.no_grad():
+            for batch_idx, batch in enumerate(progress_bar):
+                data = batch[0].to(device)
+                node_labels = batch[1].to(device)
+                mask = batch[2].to(device)
 
-            node_labels = node_labels.to(device)
-            mask = mask.to(device)
+                out = model(data)
 
-            loss = criterion(out[mask], node_labels[mask])
+                node_labels = node_labels.to(device)
+                mask = mask.to(device)
 
-            # Add softmax to out
-            softmax_out = F.softmax(out, dim=1)
+                loss = criterion(out[mask], node_labels[mask])
 
-            cycles_created, well_placed_cycles, well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles = pseudo_accuracy_metric_gnn3(
-                data, out, node_labels, mask)
+                # Add softmax to out
+                softmax_out = F.softmax(out, dim=1)
 
-            num_output += torch.sum(softmax_out[mask], dim=0).detach().cpu()
-            num_labels += torch.sum(node_labels[mask], dim=0).detach().cpu()
-            global_cycles_created += cycles_created
-            global_well_placed_cycles += well_placed_cycles
-            global_well_type_cycles += well_type_cycles
-            global_cycles_missed += cycles_missed
-            global_cycles_shouldnt_created += cycles_shouldnt_created
-            global_num_wanted_cycles += num_wanted_cycles
+                cycles_created, well_placed_cycles, well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles = pseudo_accuracy_metric_gnn3(
+                    data, out, node_labels, mask)
 
-            total_loss += loss.item() * data.num_graphs
-            total_graphs_processed += data.num_graphs
+                num_output += torch.sum(softmax_out[mask], dim=0).detach().cpu()
+                num_labels += torch.sum(node_labels[mask], dim=0).detach().cpu()
+                global_cycles_created += cycles_created
+                global_well_placed_cycles += well_placed_cycles
+                global_well_type_cycles += well_type_cycles
+                global_cycles_missed += cycles_missed
+                global_cycles_shouldnt_created += cycles_shouldnt_created
+                global_num_wanted_cycles += num_wanted_cycles
 
-            denominator = global_cycles_created + global_cycles_shouldnt_created + global_num_wanted_cycles
-            if denominator == 0:
-                f1_score = 1
-            else:
-                f1_score = 2 * global_cycles_created / denominator
+                total_loss += loss.item() * data.num_graphs
+                total_graphs_processed += data.num_graphs
 
-            if global_cycles_created == 0:
-                conditional_precision_placed = 1
-            else:
-                conditional_precision_placed = global_well_placed_cycles / (global_cycles_created)
+    denominator = global_cycles_created + global_cycles_shouldnt_created + global_num_wanted_cycles
+    if denominator == 0:
+        f1_score = 1
+    else:
+        f1_score = 2 * global_cycles_created / denominator
+
+    if global_cycles_created == 0:
+        conditional_precision_placed = 1
+    else:
+        conditional_precision_placed = global_well_placed_cycles / (global_cycles_created)
 
     return (
         total_loss / len(loader.dataset),
@@ -198,108 +207,147 @@ def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False)
 
 
 
+class TrainGNN3():
+    def __init__(self, config):
+        self.config = config
+        self.name = config['name']
+        self.datapath_train = config['datapath_train']
+        self.datapath_val = config['datapath_val']
+        self.n_epochs = config['n_epochs']
+        self.GCN_size = config['GCN_size']
+        self.mlp_hidden = config['mlp_hidden']
+        self.batch_size = config['batch_size']
+        self.feature_position = config['feature_position']
+        self.use_dropout = config['use_dropout']
+        self.lr = config['lr']
+        self.graph_embedding = config['graph_embedding']
+        self.print_bar = config['print_bar']
+        self.num_workers = config['num_workers']
+        self.every_epoch_save = config['every_epoch_save']
+        self.every_epoch_metric = config['every_epoch_metric']
+        self.val_metric_size = config['val_metric_size']
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"Training on {self.device}")
 
+        print(f"Loading data...")
+        self.loader_train, self.loader_val, self.model, self.encoding_size, self.edge_size = self.load_data_model()
+        print(f"Data loaded")
 
-def train_GNN3(name : str, datapath_train, datapath_val, n_epochs,  encoding_size, GCN_size : list, mlp_size, edge_size = 4, feature_position = True, 
-                use_dropout = False, lr = 0.0001 , print_bar = False, graph_embedding = False, mlp_hidden = 512, num_classes = 4, size_info = False, batch_size = 128, modif_accelerate = False, num_workers = 0):
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+        self.criterion = nn.CrossEntropyLoss()
 
+        self.training_history = pd.DataFrame(columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector','pseudo_precision', 'pseudo_recall' , 'pseudo_recall_placed', 'pseudo_recall_type','conditionnal_precision_placed', 'f1_score'])
+        self.eval_history = pd.DataFrame(columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector','pseudo_precision', 'pseudo_recall' , 'pseudo_recall_placed', 'pseudo_recall_type','conditionnal_precision_placed', 'f1_score'])
 
-    dataset_train = ZincSubgraphDatasetStep(data_path = datapath_train, GNN_type=3, feature_position=feature_position)
-    dataset_val = ZincSubgraphDatasetStep(data_path = datapath_val, GNN_type=3, feature_position=feature_position)
-    if feature_position :
-        encoding_size += 1
+        self.prepare_saving()
+
+    def load_data_model(self):
+        # Load the data
+        dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=3, feature_position=self.feature_position)
+        dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=3, feature_position=self.feature_position)
+        
+        loader_train = DataLoader(dataset_train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers, collate_fn=custom_collate_GNN3)
+        loader_val = DataLoader(dataset_val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers, collate_fn=custom_collate_GNN3)
+
+        encoding_size = dataset_train.encoding_size
+        edge_size = dataset_train.edge_size
+
+        
+        # Load the model
+        if self.graph_embedding:
+            model = ModelWithgraph_embedding_modif(in_channels = encoding_size + int(self.feature_position), # We increase the input size to take into account the feature position
+                                                hidden_channels_list=self.GCN_size,
+                                                mlp_hidden_channels=self.mlp_hidden,
+                                                edge_channels=edge_size, 
+                                                num_classes=4,
+                                                use_dropout=self.use_dropout)
+        else:
+            model = ModelWithEdgeFeatures(in_channels=encoding_size + int(self.feature_position), # We increase the input size to take into account the feature position
+                                        hidden_channels_list=self.GCN_size,
+                                        edge_channels=edge_size, 
+                                        use_dropout=self.use_dropout)
+        
+        return loader_train, loader_val, model.to(self.device), encoding_size, edge_size
     
-    loader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, num_workers = num_workers, collate_fn=custom_collate_GNN3)
-    loader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, num_workers = num_workers, collate_fn=custom_collate_GNN3)
+    def prepare_saving(self):
+        self.directory_path_experience = os.path.join("./experiments", self.name)
+        self.directory_path_epochs = os.path.join(self.directory_path_experience,"history_training")
 
-    if graph_embedding:
-            if modif_accelerate :
-                model = ModelWithgraph_embedding_modif(in_channels = encoding_size,hidden_channels_list= GCN_size, mlp_hidden_channels= mlp_hidden, 
-                                             edge_channels= edge_size, num_classes= num_classes,size_info= size_info)
-            else:
-                model = ModelWithgraph_embedding(in_channels = encoding_size,hidden_channels_list= GCN_size, mlp_hidden_channels= mlp_hidden, 
-                                             edge_channels= edge_size, num_classes= num_classes,size_info= size_info)
-    else:
-        model = ModelWithEdgeFeatures(in_channels=encoding_size, hidden_channels_list= GCN_size, edge_channels=edge_size, use_dropout=use_dropout)
+        if not os.path.exists(self.directory_path_experience):
+            # Create the directory if it doesn't exist
+            os.makedirs(self.directory_path_experience)
+            print(f"The '{self.name}' directory has been successfully created in the 'experiments' directory.")
+        else:
+            # Display a message if the directory already exists
+            print(f"The '{self.name}' directory already exists in the 'experiments' directory.")
+
+        if not os.path.exists(self.directory_path_epochs) :
+            os.makedirs(self.directory_path_epochs)
+        
+        file_path = os.path.join(self.directory_path_experience, "parameters.txt")
+        
+
+        with open(file_path, "w") as file:
+            for param, value in self.config.items():
+                # Convert lists to strings if necessary
+                if isinstance(value, list):
+                    value = ', '.join(str(item) for item in value)
+                line = f"{param}: {value}\n"
+                file.write(line)
     
-    
+    def train(self):
+
+        for epoch in tqdm(range(0, self.n_epochs+1)):
             
+            if epoch % self.every_epoch_metric == 0:
+                loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score = train_one_epoch(
+                    loader=self.loader_train,
+                    model=self.model,
+                    size_edge=self.edge_size,
+                    device=self.device,
+                    optimizer=self.optimizer,
+                    epoch_metric = True,
+                    criterion=self.criterion,
+                    print_bar = self.print_bar)
+                
+                self.training_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score]
 
-    
+                loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score = eval_one_epoch(
+                    loader=self.loader_val,
+                    model=self.model,
+                    size_edge=self.edge_size,
+                    device=self.device,
+                    criterion=self.criterion,
+                    print_bar = self.print_bar,
+                    val_metric_size = self.val_metric_size)
+                
+                self.eval_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score]
+            else:
+                loss, _, _, _, _, _ = train_one_epoch(
+                    loader=self.loader_train,
+                    model=self.model,
+                    size_edge=self.edge_size,
+                    device=self.device,
+                    optimizer=self.optimizer,
+                    epoch_metric = False,
+                    criterion=self.criterion,
+                    print_bar = self.print_bar)
+                
+                self.training_history.loc[epoch] = [epoch, loss, None, None, None, None, None, None, None, None]
+                self.eval_history.loc[epoch] = [epoch, None, None, None, None, None, None, None, None, None]
 
+            if (epoch) % self.every_epoch_save == 0:
+                checkpoint = {
+                    'epoch': epoch,
+                    'model_state_dict': self.model.state_dict(),
+                    'optimizer_state_dict': self.optimizer.state_dict(),
+                    # Add any other relevant information you want to save here
+                }
+                epoch_save_file = os.path.join(self.directory_path_epochs, f'checkpoint_epoch_{epoch}_{self.name}.pt')
+                torch.save(checkpoint, epoch_save_file)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print("Using device:", device)
-    model = model.to(device)
-    optimizer = AdamW(model.parameters(), lr=lr)
+                training_csv_directory = os.path.join(self.directory_path_experience, 'training_history.csv')    
+                self.training_history.to_csv(training_csv_directory)
 
-    # Set up the loss function for multiclass 
-    criterion = nn.CrossEntropyLoss()
-    training_history = pd.DataFrame(columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector','pseudo_precision', 'pseudo_recall' , 'pseudo_recall_placed', 'pseudo_recall_type','conditionnal_precision_placed', 'f1_score'])
-    eval_history = pd.DataFrame(columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector','pseudo_precision', 'pseudo_recall' , 'pseudo_recall_placed', 'pseudo_recall_type','conditionnal_precision_placed', 'f1_score'])
-
-    directory_path_experience = os.path.join("./experiments", name)
-    directory_path_epochs = os.path.join(directory_path_experience,"history_training")
-    if not os.path.exists(directory_path_experience):
-        # Create the directory if it doesn't exist
-        os.makedirs(directory_path_experience)
-        print(f"The '{name}' directory has been successfully created in the 'experiments' directory.")
-    else:
-        # Display a message if the directory already exists
-        print(f"The '{name}' directory already exists in the 'experiments' directory.")
-
-    if not os.path.exists(directory_path_epochs) :
-        os.makedirs(directory_path_epochs)
-    
-    file_path = os.path.join(directory_path_experience, "parameters.txt")
-    
-    parameters = {
-    " type GNN " : "GNN3",
-    "datapath_train": datapath_train,
-    "datapath_val": datapath_val,
-    "n_epochs": n_epochs,
-    "encoding_size": encoding_size,
-    "GCN_size": GCN_size,
-    "mlp_size": mlp_size,
-    "edge_size": edge_size,
-    "feature_position": feature_position,
-    "use_dropout": use_dropout,
-    "lr": lr,
-    "print_bar": print_bar
-    }
-    with open(file_path, "w") as file:
-        for param, value in parameters.items():
-            # Convert lists to strings if necessary
-            if isinstance(value, list):
-                value = ', '.join(str(item) for item in value)
-            line = f"{param}: {value}\n"
-            file.write(line)
-
-    #beginning the epoch
-    for epoch in tqdm(range(0, n_epochs+1)):
-        loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score = train_one_epoch(
-            loader_train, model, edge_size, device, optimizer, criterion, print_bar = print_bar)
-        training_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type,conditionnal_precision_placed, f1_score]
-        loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type,conditionnal_precision_placed, f1_score  = eval_one_epoch(
-            loader_val, model, edge_size, device, criterion, print_bar = print_bar)
-        eval_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type,conditionnal_precision_placed, f1_score]
-
-    #save the model(all with optimizer step, the loss ) every 5 epochs
-
-        save_every_n_epochs = 10
-        if (epoch) % save_every_n_epochs == 0:
-            checkpoint = {
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                # Add any other relevant information you want to save here
-            }
-            epoch_save_file = os.path.join(directory_path_epochs, f'checkpoint_epoch_{epoch}_{name}.pt')
-            torch.save(checkpoint, epoch_save_file)
-
-        training_csv_directory = os.path.join(directory_path_experience, 'training_history.csv')    
-        training_history.to_csv(training_csv_directory)
-
-        eval_csv_directory = os.path.join(directory_path_experience, 'eval_history.csv')    
-        eval_history.to_csv(eval_csv_directory)
-    
+                eval_csv_directory = os.path.join(self.directory_path_experience, 'eval_history.csv')    
+                self.eval_history.to_csv(eval_csv_directory)

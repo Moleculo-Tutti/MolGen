@@ -1,4 +1,4 @@
-from training_pipe_GNN3_utils import train_GNN3
+from training_pipe_GNN3_utils import TrainGNN3
 from pathlib import Path
 import argparse
 import torch
@@ -14,12 +14,9 @@ def main(args):
         config = json.load(f)
 
     # Call the train_GNN3 function with the provided arguments
-    results = train_GNN3(config["name"], Path(config["datapath_train"]), Path(config["datapath_val"]), 
-                         config["n_epochs"], config["encoding_size"], config["GCN_size"], config["edge_size"],
-                         feature_position=config["feature_position"], use_dropout=False, lr=0.0001, print_bar=False, 
-                         graph_embedding=config["graph_embedding"], mlp_hidden=config["mlp_hidden"], 
-                         batch_size=config["batch_size"], modif_accelerate=True, num_workers=config["num_workers"])
-
+    
+    TrainingGNN3 = TrainGNN3(config)
+    TrainingGNN3.train()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

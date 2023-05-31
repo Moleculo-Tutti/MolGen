@@ -17,7 +17,7 @@ from torch_geometric.data import Data
 
 
 
-def smiles_to_torch_geometric(smiles):
+def smiles_to_torch_geometric(smiles, charge=False):
     """
     Convert a SMILES string into a torch_geometric.data.Data object.
 
@@ -34,7 +34,11 @@ def smiles_to_torch_geometric(smiles):
     # Get atom features
     atom_features = []
     for atom in mol.GetAtoms():
-        atom_features.append(atom.GetAtomicNum())
+        if charge:
+            atom_charge = atom.GetFormalCharge()
+        else:
+            atom_charge = 0
+        atom_features.append(atom.GetAtomicNum()*10 + atom_charge)
     x = torch.tensor(atom_features, dtype=torch.float).view(-1, 1)
 
     # Get bond features and adjacency indices
@@ -178,77 +182,6 @@ def get_subgraph(data, indices, id_map):
 
     return subgraph_data
 
-def get_subgraph_with_terminal_nodes(data, num_atoms):
-    """
-    Get a subgraph of a torch_geometric graph molecule based on specific rules.
-
-    Args:
-    data (torch_geometric.data.Data): A PyTorch Geometric Data object representing the molecule.
-    num_atoms (int): Desired number of atoms in the subgraph.
-
-    Returns:
-    subgraph_data (torch_geometric.data.Data): Subgraph of the torch_geometric graph molecule.
-    """
-    if num_atoms < 1 or num_atoms > data.num_nodes:
-        raise ValueError("num_atoms must be between 1 and the number of nodes in the graph.")
-
-    # Randomly select an atom
-    start_atom = random.choice(range(data.num_nodes))
-
-    # Initialize the queue and visited set
-    queue = [start_atom]
-    visited = set()
-
-    id_map = {}
-    new_id = 0
-
-    # Breadth-first search
-    while queue:
-        current = queue.pop(0)
-        visited.add(current)
-
-        id_map[current] = new_id
-        new_id += 1
-
-        # Add neighbors to the queue
-        neighbors = data.edge_index[:, data.edge_index[0] == current][1].tolist()
-        random.shuffle(neighbors)
-        for neighbor in neighbors:
-            if neighbor not in visited and neighbor not in queue:
-                queue.append(neighbor)
-
-        # Stop if we've reached the desired number of atoms
-        if len(visited) == num_atoms:
-            break
-
-    # Get the subgraph with the selected atoms
-    subgraph_indices = torch.tensor(list(visited), dtype=torch.long)
-    subgraph_data = get_subgraph(data, subgraph_indices, id_map)
-    
-    external_neighbors = []
-    oldest_non_completed = min([i for i in neighbors if i in visited], key = lambda x:id_map[x])
-    neighbors_oldest_non_completed = data.edge_index[:, data.edge_index[0] == oldest_non_completed][1].tolist()
-
-        
-    for neighbor in neighbors_oldest_non_completed:
-        if neighbor not in visited:
-            edge_attr_idx = (data.edge_index[0] == oldest_non_completed) & (data.edge_index[1] == neighbor)
-            edge_data = data.edge_attr[edge_attr_idx][0]
-
-            external_neighbors_edges = []
-            for neighbor2 in data.edge_index[:, data.edge_index[0] == neighbor][1].tolist():
-                if neighbor2 in visited and neighbor2 != oldest_non_completed:
-                    # Get the index of the edge attribute
-                    edge_attr_idx = (data.edge_index[0] == neighbor) & (data.edge_index[1] == neighbor2)
-                    # Get the edge attribute
-                    edge_attr = data.edge_attr[edge_attr_idx][0]
-                    external_neighbors_edges.append((neighbor2, edge_attr))
-            external_neighbors.append((neighbor, data.x[neighbor], edge_data, external_neighbors_edges))
-
-    terminal_node_info = (oldest_non_completed, external_neighbors)
-
-    return subgraph_data, terminal_node_info, id_map
-
 def get_subgraph_with_terminal_nodes_step(data, num_steps, impose_edges=False):
     """
     Get a subgraph of a torch_geometric graph molecule based on specific rules.
@@ -321,9 +254,6 @@ def get_subgraph_with_terminal_nodes_step(data, num_steps, impose_edges=False):
             subgraph_data = get_subgraph(data, subgraph_indices, id_map)
             return subgraph_data, terminal_node_infos, id_map
 
-        
-
-
         for neighbor in neighbors:
             queue.append(neighbor)
             subgraph_atoms.append(neighbor)
@@ -356,15 +286,18 @@ def node_encoder(atom_num : float, encoding_option = 'all') -> torch.Tensor:
     Encode the atom number into a one-hot vector.
     """
     #Verify that encoding_option is among the allowed values
-    if encoding_option not in ['all', 'reduced']:
-        raise ValueError("encoding_option must be either 'all' or 'reduced'.")
+    if encoding_option not in ['all', 'reduced', 'charged']:
+        raise ValueError("encoding_option must be either 'all' or 'reduced' or 'charged'.")
     
     if encoding_option == 'all':
-        atom_mapping = {6: 0, 7: 1, 8: 2, 9: 3, 15: 4, 16: 5, 17: 6, 35: 7, 53: 8}
+        atom_mapping = {60: 0, 70: 1, 80: 2, 90: 3, 150: 4, 160: 5, 170: 6, 350: 7, 530: 8}
         size = 9
     elif encoding_option == 'reduced':
-        atom_mapping = {6: 0, 7: 1, 8: 2, 9: 3, 16: 4, 17: 5}
+        atom_mapping = {60: 0, 70: 1, 80: 2, 90: 3, 160: 4, 170: 5}
         size = 6
+    elif encoding_option == 'charged':
+        atom_mapping = {60: 0, 70:1, 71: 2, 69: 3, 80:4, 79:5, 90:6, 160:7, 159:8, 170:9, 350:10, 530:11}
+        size = 12
 
     # Initialize the one-hot vector
     one_hot = torch.zeros(size + 1)
@@ -373,7 +306,7 @@ def node_encoder(atom_num : float, encoding_option = 'all') -> torch.Tensor:
     if int(atom_num) in atom_mapping:
         one_hot[atom_mapping[int(atom_num)]] = 1
     else:
-        raise ValueError("Atom number not in mapping.")
+        raise ValueError("Atom number {num} not in mapping.".format(num = int(atom_num)))
     
     return one_hot
 
@@ -403,8 +336,10 @@ def process_encode_graph(smiles, encoding_option = 'all') -> torch_geometric.dat
     smiles (str): SMILES string of the molecule.
     encoding_option (str): Option for which dataset to use. Must be either 'all' or 'reduced'. Used in node_encoder.
     """
-
-    data = smiles_to_torch_geometric(smiles)
+    charge = False
+    if encoding_option == 'charged':
+        charge = True
+    data = smiles_to_torch_geometric(smiles, charge=charge)
 
     node_features = data.x
     edge_attr = data.edge_attr

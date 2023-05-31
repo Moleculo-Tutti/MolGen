@@ -15,7 +15,7 @@ import os
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-from DataPipeline.preprocessing import get_subgraph_with_terminal_nodes, get_subgraph_with_terminal_nodes_step
+from DataPipeline.preprocessing import get_subgraph_with_terminal_nodes_step
 
 def add_node_feature_based_on_position(data):
 
@@ -51,47 +51,6 @@ def add_node_feature_based_on_position(data):
     data.x = torch.cat([data.x, new_feature], dim=-1)
 
     return data
-
-class ZincSubgraphDataset(Dataset):
-
-    def __init__(self, data_path):
-        self.data_list = torch.load(data_path)
-        self.encoding_size = self.data_list[0].x.size(1)
-        print('Dataset encoded with size {}'.format(self.encoding_size))
-
-    def __len__(self):
-        return len(self.data_list)
-
-    def __getitem__(self, idx):
-        
-        preprocessed_graph = self.data_list[idx]
-
-        assert preprocessed_graph.x.size(1) == self.encoding_size, 'Encoding size mismatch'
-   
-        mol_size = len(preprocessed_graph.x)
-        num_atoms = random.choice(range(3, mol_size + 1))
-        subgraph, terminal_nodes, id_map = get_subgraph_with_terminal_nodes(preprocessed_graph, num_atoms)
-
-        subgraph.x[id_map[terminal_nodes[0]]][self.encoding_size - 1] = 1
-
-        #get the embedding of all the first element of terminal_nodes[1] and make them into a list to take the mean, if terminal_nodes[1] empty make torch.zeros(10)
-        label_gnn1 = torch.zeros(self.encoding_size)
-        neighbor_atom_list = [neighbor[1] for neighbor in terminal_nodes[1]]
-
-        if len(neighbor_atom_list) != 0:
-            label_gnn1 += torch.mean(torch.stack(neighbor_atom_list, dim=0), dim=0)
-        else:
-            label_gnn1 += torch.tensor([0] * (self.encoding_size - 1) + [1])
-
-        subgraph.y = label_gnn1
-        
-        #id_chosen = np.random.randint(len(terminal_nodes[1]))
-        #subgraph.neighbor = terminal_nodes[1][id_chosen][1]
-
-        #subgraph.edge_neighbor = terminal_nodes[1][id_chosen][2]
-
-        return subgraph, terminal_nodes
-
 
 class ZincSubgraphDatasetStep(Dataset):
 
@@ -156,6 +115,7 @@ class ZincSubgraphDatasetStep(Dataset):
 
                 feature_position_tensor = torch.zeros(subgraph.x.size(0), 1)
                 feature_position_tensor[0:id_map[terminal_nodes[0]]] = 1
+                subgraph.neighbor = torch.cat([subgraph.neighbor, torch.zeros(1)], dim=0)
                 subgraph.x = torch.cat([subgraph.x, feature_position_tensor], dim=1)
 
 
