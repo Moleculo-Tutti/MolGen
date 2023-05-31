@@ -323,7 +323,7 @@ class TrainGNN3():
                 
                 self.eval_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score]
             else:
-                loss, _, _, _, _, _ = train_one_epoch(
+                loss, _, _, _, _, _, _, _, _ = train_one_epoch(
                     loader=self.loader_train,
                     model=self.model,
                     size_edge=self.edge_size,
