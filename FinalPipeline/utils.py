@@ -60,10 +60,10 @@ def get_model_GNN1(encoding_size):
                 edge_channels=4, 
                 num_classes=encoding_size, 
                 use_dropout=False,
-                size_info=False)
+                size_info=True)
 
 def get_model_GNN2(encoding_size):
-    return GNN2(in_channels=encoding_size, 
+    return GNN2(in_channels=encoding_size +1 , 
                 hidden_channels_list=[64, 128, 256, 512, 512], 
                 mlp_hidden_channels=512, 
                 edge_channels=4, 
@@ -160,14 +160,24 @@ def one_step(input_graph, queue : list, GNN1, GNN2, GNN3, device):
         graph2 = input_graph.clone()
         graph2.x[current_node, -1] = 1
 
+        # add a zeros to neighbor 
+        encoded_predicted_node = torch.cat([encoded_predicted_node, torch.zeros(1, 1)], dim=1)
+
         graph2.neighbor = encoded_predicted_node
+       
+
+
+        # Add a new column indicating the nodes that have been finalized
+        graph2.x = torch.cat([graph2.x, torch.zeros(graph2.x.size(0), 1)], dim=1)
+        graph2.x[0:current_node, -1] = 1
+
         prediction2 = GNN2(graph2.to(device))
         predicted_edge = torch.multinomial(F.softmax(prediction2, dim=1), 1).item()
         encoded_predicted_edge = torch.zeros(prediction2.size(), dtype=torch.float)
         encoded_predicted_edge[0, predicted_edge] = 1
         # GNN3
 
-        new_graph = add_edge_or_node_to_graph(input_graph.clone(), current_node, encoded_predicted_edge, new_node_attr = encoded_predicted_node)
+        new_graph = add_edge_or_node_to_graph(input_graph.clone(), current_node, encoded_predicted_edge, new_node_attr = encoded_predicted_node[:, :-1])
         graph3 = new_graph.clone()
         # Add a one of the last node that are going to possibly bond to another node
         graph3.x[-1, -1] = 1

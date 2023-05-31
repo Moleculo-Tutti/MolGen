@@ -98,6 +98,7 @@ class ZincSubgraphDatasetStep(Dataset):
     def __init__(self, data_path, GNN_type : str, feature_position : bool = False):
         self.data_list = torch.load(data_path)
         self.encoding_size = self.data_list[0].x.size(1)
+        self.edge_size = self.data_list[0].edge_attr.size(1)
         self.GNN_type = GNN_type
         self.feature_position = feature_position
         if GNN_type >= 2:
@@ -121,34 +122,51 @@ class ZincSubgraphDatasetStep(Dataset):
         if self.GNN_type >= 2:
             num_steps = random.choice(range(1, mol_size))
         subgraph, terminal_nodes, id_map = get_subgraph_with_terminal_nodes_step(preprocessed_graph, num_steps, impose_edges=self.impose_edges)
-        subgraph.x[id_map[terminal_nodes[0]]][self.encoding_size - 1] = 1
 
-        #get the embedding of all the first element of terminal_nodes[1] and make them into a list to take the mean, if terminal_nodes[1] empty make torch.zeros(10)
-        label_gnn1 = torch.zeros(self.encoding_size)
-        neighbor_atom_list = [neighbor[1] for neighbor in terminal_nodes[1]]
+        if self.GNN_type == 1:
 
-        if len(neighbor_atom_list) != 0:
-            label_gnn1 += torch.mean(torch.stack(neighbor_atom_list, dim=0), dim=0)
-        else:
-            label_gnn1 += torch.tensor([0] * (self.encoding_size - 1) + [1])
+            subgraph.x[id_map[terminal_nodes[0]]][self.encoding_size - 1] = 1 #add a one on the current atom (terminal_nodes[0])
 
-        subgraph.y = label_gnn1
+            #get the embedding of all the first element of terminal_nodes[1] and make them into a list to take the mean, if terminal_nodes[1] empty make torch.zeros(10)
+            label_gnn1 = torch.zeros(self.encoding_size)
+            neighbor_atom_list = [neighbor[1] for neighbor in terminal_nodes[1]]
+
+            if len(neighbor_atom_list) != 0:
+                label_gnn1 += torch.mean(torch.stack(neighbor_atom_list, dim=0), dim=0) #if there are some neighbors, we compute the average of their labels
+            else:
+                label_gnn1 += torch.tensor([0] * (self.encoding_size - 1) + [1]) #if there are no neighbors, we put a one on the last position to indicate a stop
+
+            if self.feature_position:
+                
+                feature_position_tensor = torch.zeros(subgraph.x.size(0), 1)
+                feature_position_tensor[0:id_map[terminal_nodes[0]]] = 1
+                subgraph.x = torch.cat([subgraph.x, feature_position_tensor], dim=1)
+            
+            subgraph.y = label_gnn1
         
         if self.GNN_type == 2:
-            id_chosen = np.random.randint(len(terminal_nodes[1]))
-            subgraph.neighbor = terminal_nodes[1][id_chosen][1]
-            subgraph.edge_neighbor = terminal_nodes[1][id_chosen][2]
+            
+            subgraph.x[id_map[terminal_nodes[0]]][self.encoding_size - 1] = 1 #add a one on the current atom (terminal_nodes[0])
+
+            id_chosen = np.random.randint(len(terminal_nodes[1])) # we sample a random neighbor
+            subgraph.neighbor = terminal_nodes[1][id_chosen][1] # we add the neighbor sampled to the graph
+            subgraph.edge_neighbor = terminal_nodes[1][id_chosen][2] # we add the edge corresponding to the neighbor sampled to the graph
+
+            if self.feature_position:
+
+                feature_position_tensor = torch.zeros(subgraph.x.size(0), 1)
+                feature_position_tensor[0:id_map[terminal_nodes[0]]] = 1
+                subgraph.x = torch.cat([subgraph.x, feature_position_tensor], dim=1)
+
 
         if self.GNN_type == 3:
 
-            # Put to zero the current node 
-            subgraph.x[id_map[terminal_nodes[0]]][self.encoding_size - 1] = 0
-
-            id_chosen = np.random.randint(len(terminal_nodes[1]))
+            id_chosen = np.random.randint(len(terminal_nodes[1])) #we sample a random neighbor
             neighbor = terminal_nodes[1][id_chosen][1]
-            # Put a one to indicate the last node generated
+
+            # Put a one to indicate the last node generated before adding it to the graph
             neighbor[-1] = 1
-            edge_neighbor_attr = terminal_nodes[1][id_chosen][2]
+            edge_neighbor_attr = terminal_nodes[1][id_chosen][2] # we get the attribute of the edge
 
             #add neighbor and edge_neighbor to the graph
             subgraph.x = torch.cat([subgraph.x, neighbor.unsqueeze(0)], dim=0)
@@ -162,14 +180,14 @@ class ZincSubgraphDatasetStep(Dataset):
             subgraph.edge_attr = torch.cat([subgraph.edge_attr, edge_neighbor_attr.unsqueeze(0), edge_neighbor_attr.unsqueeze(0)], dim=0)
 
 
-            node_features_label = torch.zeros(len(subgraph.x), 5)
+            node_features_label = torch.zeros(len(subgraph.x), 4) #there is no triple bond for closing the cycle
 
             # put ones in the last column of the node_features_label for the terminal node (put stop everywhere)
             node_features_label[:, -1] = 1
 
             if len(terminal_nodes[1][id_chosen][3]) != 0:
                 for cycle_neighbor in terminal_nodes[1][id_chosen][3]:
-                    node_features_label[id_map[cycle_neighbor[0]]][:4] = cycle_neighbor[1]
+                    node_features_label[id_map[cycle_neighbor[0]]][:3] = cycle_neighbor[1][:3]
                     node_features_label[id_map[cycle_neighbor[0]]][-1] = 0
 
             mask = torch.cat((torch.zeros(node1 + 1), torch.ones(len(subgraph.x) - node1 - 1)), dim=0).bool()
@@ -180,10 +198,9 @@ class ZincSubgraphDatasetStep(Dataset):
                 opposite_mask = torch.logical_not(mask)
                 opposite_mask[-1] = False
                 opposite_mask[node1] = False
-                subgraph.x = torch.cat((subgraph.x, opposite_mask.unsqueeze(1)), dim=1)
+                # we add the opposite of the mask to the node features that correspond to the feature_position
+                subgraph.x = torch.cat((subgraph.x, opposite_mask.unsqueeze(1)), dim=1) 
 
-            #remove the forth column of the node_features_label and keep the last one
-            node_features_label = node_features_label[:, [0, 1, 2, 4]]
 
             subgraph.cycle_label = node_features_label
             subgraph.mask = mask

@@ -2,12 +2,16 @@
     "name": "GNN1_500_big_512_size",
     "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_no_I_Br_P.pt",
     "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_no_I_Br_P.pt",
-    "encoding_size": 7,
     "GCN_size": [64, 128, 256, 512, 512],
-    "edge_size": 4,
     "n_epochs": 500,
-    "mlp_size": 512,
+    "mlp_hidden": 512,
     "batch_size": 128,
     "use_size": true,
-    "num_workers": 16
+    "feature_position": true,
+    "use_dropout": false,
+    "lr": 0.0001,
+    "print_bar": false,
+    "num_workers": 16,
+    "every_epoch_save" : 5,
+    "every_epoch_metric" : 5 
 }

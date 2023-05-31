@@ -165,7 +165,7 @@ def plot_history_GNN3(csv_file, legend_dict=None):
     df['avg_output_vector'] = df['avg_output_vector'].apply(lambda x: [float(num) for num in re.findall(r'\d+\.\d+', x)])
     df['avg_label_vector'] = df['avg_label_vector'].apply(lambda x: [float(num) for num in re.findall(r'\d+\.\d+', x)])
     # Création de la figure et des sous-graphiques
-    fig, axs = plt.subplots(5, 2, figsize=(10, 8))
+    fig, axs = plt.subplots(5, 2, figsize=(15, 10))
 
     # Graphique pour la loss
     axs[0, 0].plot(df['epoch'], df['loss'])

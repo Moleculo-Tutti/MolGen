@@ -111,7 +111,7 @@ def main(args):
 
     #Save the molecule list in a csv file
     df = pd.DataFrame(molecules, columns=['SMILES'])
-    df.to_csv('generated_molecules.csv', index=False)
+    df.to_csv('generated_molecules_10000.csv', index=False)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

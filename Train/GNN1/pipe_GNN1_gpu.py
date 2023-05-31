@@ -14,22 +14,7 @@ def main(args):
         config = json.load(f)
 
     # Call the train_GNN1 function with the provided arguments
-    results = train_GNN1(name = config["name"],
-                         datapath_train = config["datapath_train"],
-                         datapath_val = config["datapath_val"],
-                         n_epochs = config["n_epochs"],
-                         encoding_size = config["encoding_size"],
-                         GCN_size = config["GCN_size"],
-                         mlp_size = config["mlp_size"],
-                         edge_size = config["edge_size"],
-                         batch_size = config["batch_size"],
-                         num_workers = config["num_workers"],
-                         use_size= config["use_size"],
-                         feature_position = True, 
-                         use_dropout = False, 
-                         lr = 0.0001 , 
-                         print_bar = False)
-
+    results = train_GNN1(config)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
