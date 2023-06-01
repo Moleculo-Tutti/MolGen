@@ -21,7 +21,6 @@ from tqdm import tqdm
 from tqdm.notebook import tqdm as tqdm_notebook
 import numpy as np
 
-
 import sys
 import os
 
@@ -32,7 +31,7 @@ sys.path.append(parent_dir)
 sys.path.append(parent_parent_dir)
 
 from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_passive_add_feature_GNN2, custom_collate_GNN2
-from Model.GNN2 import ModelWithEdgeFeatures
+from Model.GNN2 import ModelWithEdgeFeatures, ModelWithNodeConcat
 from Model.metrics import pseudo_accuracy_metric, pseudo_recall_for_each_class, pseudo_precision_for_each_class
 
 def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoch_metric, print_bar = False):
@@ -272,6 +271,7 @@ class TrainGNN2():
         self.every_epoch_metric = config['every_epoch_metric']
         self.val_metric_size = config['val_metric_size']
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.node_embeddings = config['node_embeddings']
         print(f"Training on {self.device}")
 
         print(f"Loading data...")
@@ -297,9 +297,17 @@ class TrainGNN2():
         encoding_size = dataset_train.encoding_size
         edge_size = dataset_train.edge_size
 
+        if self.node_embeddings :
+            model = ModelWithNodeConcat(in_channels= encoding_size+ int(self.feature_position), 
+                                        hidden_channels_list= self.GCN_size,
+                                        mlp_hidden_channels= self.mlp_hidden,
+                                        edge_channels= edge_size,
+                                        encoding_size= encoding_size,
+                                        num_classes=  edge_size)
         
+        else :
         # Load the model
-        model = ModelWithEdgeFeatures(in_channels=encoding_size + int(self.feature_position), # We increase the input size to take into account the feature position
+            model = ModelWithEdgeFeatures(in_channels=encoding_size + int(self.feature_position), # We increase the input size to take into account the feature position
                                       hidden_channels_list=self.GCN_size, 
                                       mlp_hidden_channels=self.mlp_hidden, 
                                       edge_channels=edge_size, 

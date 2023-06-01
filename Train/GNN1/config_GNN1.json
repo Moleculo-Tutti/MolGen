@@ -9,6 +9,7 @@
     "use_size": true,
     "feature_position": true,
     "use_dropout": false,
+    "node_embeddings": true,
     "lr": 0.0001,
     "print_bar": false,
     "every_epoch_save" : 20,

@@ -93,13 +93,14 @@ class ModelWithEdgeFeatures(torch.nn.Module):
     
 
 class ModelWithNodeConcat(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels_list, mlp_hidden_channels, edge_channels, num_classes=10, use_dropout=True, use_batchnorm=True, size_info = True):
+    def __init__(self, in_channels, hidden_channels_list, mlp_hidden_channels, edge_channels, encoding_size, num_classes=10, use_dropout=True, use_batchnorm=True, size_info = True):
         torch.manual_seed(12345)
         super(ModelWithNodeConcat, self).__init__()
 
         self.use_dropout = use_dropout
         self.use_batchnorm = use_batchnorm
         self.size_info = size_info
+        self.encoding_size = encoding_size
 
         self.message_passing_layers = torch.nn.ModuleList()
         self.batch_norm_layers = torch.nn.ModuleList()
@@ -133,7 +134,7 @@ class ModelWithNodeConcat(torch.nn.Module):
             x = F.relu(x)
             if self.use_dropout:
                 x = F.dropout(x, training=self.training)
-            specified_nodes = torch.nonzero(x[:, 13] == 1).squeeze()
+            specified_nodes = torch.nonzero(x[:, self.encoding_size-1] == 1).squeeze() #because the attention is the last on of encoding size
             node_embedding = x[specified_nodes]
             node_embeddings.append(node_embedding)
         # Aggregation function to obtain graph embedding
