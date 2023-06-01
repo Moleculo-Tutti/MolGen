@@ -127,6 +127,7 @@ class ModelWithNodeConcat(torch.nn.Module):
         x, edge_index, edge_attr, batch = data.x, data.edge_index, data.edge_attr, data.batch
 
         node_embeddings = []
+        specified_nodes = torch.nonzero(x[:, self.encoding_size-1] == 1).squeeze() 
         for message_passing_layer, batch_norm_layer in zip(self.message_passing_layers, self.batch_norm_layers):
             x = message_passing_layer(x, edge_index, edge_attr)
             if self.use_batchnorm:
@@ -134,7 +135,7 @@ class ModelWithNodeConcat(torch.nn.Module):
             x = F.relu(x)
             if self.use_dropout:
                 x = F.dropout(x, training=self.training)
-            specified_nodes = torch.nonzero(x[:, self.encoding_size-1] == 1).squeeze() #because the attention is the last on of encoding size
+            #because the attention is the last on of encoding size
             node_embedding = x[specified_nodes]
             node_embeddings.append(node_embedding)
         # Aggregation function to obtain graph embedding
