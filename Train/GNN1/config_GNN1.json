@@ -15,5 +15,5 @@
     "every_epoch_save" : 50,
     "every_epoch_metric" : 10,
     "val_metric_size" : 5,
-    "num_workers": 0
+    "num_workers": 8
 }
