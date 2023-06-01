@@ -53,28 +53,34 @@ def load_model(checkpoint_path, model, optimizer):
     
     return model, optimizer
 
-def get_model_GNN1(encoding_size):
-    return GNN1(in_channels=encoding_size + 1, 
-                hidden_channels_list=[64, 128, 256, 512, 512], 
-                mlp_hidden_channels=512, 
+def get_model_GNN1(config, encoding_size):
+    if config['feature_position']:
+        encoding_size += 1
+    return GNN1(in_channels=encoding_size,
+                hidden_channels_list=config["GCN_size"],
+                mlp_hidden_channels=config['mlp_hidden'],
                 edge_channels=4, 
                 num_classes=encoding_size, 
-                use_dropout=False,
-                size_info=True)
+                use_dropout=config['use_dropout'],
+                size_info=config['use_size'])
 
-def get_model_GNN2(encoding_size):
-    return GNN2(in_channels=encoding_size +1 , 
-                hidden_channels_list=[64, 128, 256, 512, 512], 
-                mlp_hidden_channels=512, 
+def get_model_GNN2(config, encoding_size):
+    if config['feature_position']:
+        encoding_size += 1
+    return GNN2(in_channels=encoding_size, 
+                hidden_channels_list=config["GCN_size"],
+                mlp_hidden_channels=config['mlp_hidden'],
                 edge_channels=4, 
                 num_classes=4, 
-                use_dropout=False)
+                use_dropout=config['use_dropout'])
 
-def get_model_GNN3(encoding_size):
-    return GNN3(in_channels=encoding_size + 1, 
-                hidden_channels_list=[32, 64, 128, 256, 128, 64, 32, 5],
+def get_model_GNN3(config, encoding_size):
+    if config['feature_position']:
+        encoding_size += 1
+    return GNN3(in_channels=encoding_size, 
+                hidden_channels_list=config["GCN_size"],
                 edge_channels=4, 
-                use_dropout=False)
+                use_dropout=config['use_dropout'])
 
 def get_optimizer(model, lr):
     return torch.optim.Adam(model.parameters(), lr=lr)
@@ -118,8 +124,8 @@ def select_node(tensor):
     # Vérifier que le tenseur est de dimension 2 et que la deuxième dimension est de taille 4
     assert len(tensor.shape) == 2 and tensor.shape[1] == 5, "Le tenseur doit être de dimension 2 et la deuxième dimension doit être de taille 4"
 
-    # Somme sur les 4 premières dimensions de chaque vecteur
-    sum_on_first_three_dims = tensor[:, :4].sum(dim=1)
+    # Somme sur les 3 premières dimensions de chaque vecteur
+    sum_on_first_three_dims = tensor[:, :3].sum(dim=1)
 
     # Trouver l'indice du node avec la plus grande somme
     max_index = torch.argmax(sum_on_first_three_dims)
@@ -209,3 +215,5 @@ def one_step(input_graph, queue : list, GNN1, GNN2, GNN3, device):
 
         output_graph = add_edge_or_node_to_graph(new_graph, graph1.x.size(0), encoded_predicted_edge, other_node=current_node + max_index+1)
         return output_graph, queue
+    
+

@@ -7,9 +7,29 @@ import re
 
 
 
-def plot_history_GNN1(csv_file, legend_dict=None):
+def plot_history_GNN1(csv_file, charged=False):
     df = pd.read_csv(csv_file)
-    conversion = {0: 'C', 1: 'N', 2: 'O', 3: 'F', 4: 'S', 5: 'Cl', 6:'stop'}
+    if charged:
+        conversion = {0: 'C', 1: 'N', 2: 'N+', 3: 'N-', 4:'O', 5:'O-', 6:'F', 8:'S', 9:'S-', 10:'Cl', 11:'Br', 12:'I'}
+    else:
+        conversion = {0: 'C', 1: 'N', 2: 'O', 3: 'F', 4:'S', 5:'Cl', 6:'Br', 7:'I'}
+
+    # Creating a df for each metric (loss, avg_output_vector, avg_label_vector, precision, recall)
+    df_loss = df[['epoch', 'loss']]
+    df_loss = df_loss.dropna()
+
+    df_avg_output_vector = df[['epoch', 'avg_output_vector']]
+    df_avg_output_vector = df_avg_output_vector.dropna()
+
+    df_avg_label_vector = df[['epoch', 'avg_label_vector']]
+    df_avg_label_vector = df_avg_label_vector.dropna()
+
+    df_precision = df[['epoch', 'precision']]
+    df_precision = df_precision.dropna()
+
+    df_recall = df[['epoch', 'recall']]
+    df_recall = df_recall.dropna()
+
     # Conversion des colonnes de type string en listes
     df['avg_output_vector'] = df['avg_output_vector'].apply(lambda x: [float(num) for num in re.findall(r'\d+\.\d+', x)])
     df['avg_label_vector'] = df['avg_label_vector'].apply(lambda x: [float(num) for num in re.findall(r'\d+\.\d+', x)])
@@ -28,47 +48,51 @@ def plot_history_GNN1(csv_file, legend_dict=None):
     axs[0, 1].set_xlabel('Epoch')
     axs[0, 1].set_ylabel('Log_Loss')
     axs[0, 1].set_title('Log_Loss by epochs')
-    axs[0, 1].legend()
 
     # Graphique pour avg_output_vector / avg_label_vector
     for i in range(len(df['avg_output_vector'][0])):
-        ratio = df['avg_output_vector'].apply(lambda x: x[i]) / df['avg_label_vector'].apply(lambda x: x[i])
-        axs[1, 0].plot(df['epoch'], ratio, label=conversion[i])
+        ratio = df['avg_output_vector'].apply(lambda x: x[i] if x is not None else None) / df['avg_label_vector'].apply(lambda x: x[i] if x is not None else None)
+        ratio = ratio[pd.notnull(ratio)]
+        epochs_ratio = df['epoch'][ratio.index]
+        axs[1, 0].plot(epochs_ratio, ratio, label=conversion[i])
 
     axs[1, 0].set_xlabel('Epoch')
     axs[1, 0].set_ylabel('Value')
     axs[1, 0].set_title('avg_output_vector / avg_label_vector by epochs')
-    axs[1, 0].legend()
 
     # Graphique pour la precision
     for i in range(len(df['precision'][0])):
-        precision =  df['precision'].apply(lambda x: x[i])
-        axs[1, 1].plot(df['epoch'], precision, label=conversion[i])
+        precision =  df['precision'].apply(lambda x: x[i] if x is not None else None)
+        precision = precision[pd.notnull(precision)]
+        epochs_precision = df['epoch'][precision.index]
+        axs[1, 1].plot(epochs_precision, precision, label=conversion[i])
 
     axs[1, 1].set_xlabel('Epoch')
     axs[1, 1].set_ylabel('Value')
     axs[1, 1].set_title('Precision by epochs')
-    axs[1, 1].legend()
 
     # Graphique pour le recall
     for i in range(len(df['recall'][0])):
-        recall = df['recall'].apply(lambda x: x[i])
-        axs[2, 0].plot(df['epoch'], recall, label=conversion[i])
+        recall = df['recall'].apply(lambda x: x[i] if x is not None else None)
+        recall = recall[pd.notnull(recall)]
+        epochs_recall = df['epoch'][recall.index]
+        axs[2, 0].plot(epochs_recall, recall, label=conversion[i])
 
     axs[2, 0].set_xlabel('Epoch')
     axs[2, 0].set_ylabel('Value')
     axs[2, 0].set_title('Recall by epochs')
-    axs[2, 0].legend()
 
     for i in range(len(df['recall'][0])):
-        recall = df['recall'].apply(lambda x: x[i])
-        precision =  df['precision'].apply(lambda x: x[i])
-        axs[2, 1].plot(df['epoch'], 2/(1/recall + 1/precision), label=conversion[i])
+        recall = df['recall'].apply(lambda x: x[i] if x is not None else None)
+        precision =  df['precision'].apply(lambda x: x[i] if x is not None else None)
+        f1_score = 2/(1/recall + 1/precision)
+        f1_score = f1_score[pd.notnull(f1_score)]
+        epochs_f1_score = df['epoch'][f1_score.index]
+        axs[2, 1].plot(epochs_f1_score, f1_score, label=conversion[i])
 
     axs[2, 1].set_xlabel('Epoch')
     axs[2, 1].set_ylabel('Value')
     axs[2, 1].set_title('F1_score by epochs')
-    axs[2, 1].legend()
 
     axs[1, 0].legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
     axs[2, 0].legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
