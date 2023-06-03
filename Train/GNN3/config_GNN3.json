@@ -1,5 +1,5 @@
 {
-    "name": "GNN3_charged",
+    "name": "GNN3_charged_graph_embedding",
     "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_charged.pt",
     "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_charged.pt",
     "n_epochs": 500,

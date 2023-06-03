@@ -1,10 +1,10 @@
 {
-    "name": "GNN2_charged_with_node_embedding_concat",
+    "name": "GNN2_charged_with_node_embedding_concat_bigger",
     "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_charged.pt",
     "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_charged.pt",
-    "GCN_size": [32, 64, 128, 128, 256, 256],
+    "GCN_size": [64, 128, 128, 256, 256,512],
     "n_epochs": 1000,
-    "mlp_hidden": 128,
+    "mlp_hidden": 512,
     "batch_size": 128,
     "feature_position": true,
     "use_dropout": false,
