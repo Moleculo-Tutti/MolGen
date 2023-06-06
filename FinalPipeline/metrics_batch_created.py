@@ -11,14 +11,12 @@ def calculate_uniqueness(batch_smiles_valid):
     return uniqueness, list(batch_smiles_uniq)
 
 
-def calculate_novelty(batch_smiles_uniq, zinc_dataset_path):
-    # Charger le jeu de données d'entraînement
-    zinc = pd.read_csv(zinc_dataset_path)
+def calculate_novelty(batch_smiles_uniq, zinc_mol_list):
     
     # Vérifier la nouveauté du lot par rapport au jeu de données d'entraînement
     non_new_molecules = []
     for smiles in tqdm(batch_smiles_uniq):
-        if smiles in zinc['smiles'].values:
+        if smiles in zinc_mol_list:
             non_new_molecules.append(smiles)
     
     novelty = 1 - len(non_new_molecules) / len(batch_smiles_uniq)
