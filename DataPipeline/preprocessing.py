@@ -17,12 +17,13 @@ from torch_geometric.data import Data
 
 
 
-def smiles_to_torch_geometric(smiles, charge=False):
+def smiles_to_torch_geometric(smiles, charge=False, kekulize=False):
     """
     Convert a SMILES string into a torch_geometric.data.Data object.
 
     Args:
     smiles (str): A SMILES string.
+    kekulize (bool): If True, kekulize the molecule before conversion.
 
     Returns:
     data (torch_geometric.data.Data): A PyTorch Geometric Data object representing the molecule.
@@ -30,6 +31,13 @@ def smiles_to_torch_geometric(smiles, charge=False):
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         raise ValueError("Invalid SMILES string")
+
+    # Kekulize if necessary
+    if kekulize:
+        try:
+            Chem.Kekulize(mol)
+        except:
+            raise ValueError("Failed to kekulize SMILES string")
 
     # Get atom features
     atom_features = []
@@ -57,7 +65,6 @@ def smiles_to_torch_geometric(smiles, charge=False):
     data.num_nodes = len(atom_features)
 
     return data
-
 
 
 def torch_geometric_to_networkx(data):
@@ -312,24 +319,33 @@ def node_encoder(atom_num : float, encoding_option = 'all') -> torch.Tensor:
     
     return one_hot
 
-def edge_encoder(bond_type : float) -> torch.Tensor:
+def edge_encoder(bond_type : float, kekulize=False) -> torch.Tensor:
     """
     Encode the bond type into a one-hot vector.
+    
+    Args:
+    bond_type (float): The bond type as a float (1.0 for single, 2.0 for double, 3.0 for triple, 1.5 for aromatic).
+    kekulize (bool): If True, encode the bond type into a 3-dimensional vector (without aromatic bonds).
+
+    Returns:
+    one_hot (torch.Tensor): A one-hot vector representing the bond type.
     """
     # Initialize the one-hot vector
-    one_hot = torch.zeros(4)
+    if kekulize:
+        one_hot = torch.zeros(3)
+    else:
+        one_hot = torch.zeros(4)
 
     # Encode the bond type
-    if  1.4 < bond_type < 1.6:
+    if not kekulize and 1.4 < bond_type < 1.6:
         one_hot[0] = 1
     else:
         bond_type = int(bond_type)
-        one_hot[bond_type] = 1
-    
+        one_hot[bond_type - 1] = 1
+
     return one_hot
 
-def process_encode_graph(smiles, encoding_option = 'all') -> torch_geometric.data.Data:
-
+def process_encode_graph(smiles, encoding_option='all', kekulize=False) -> torch_geometric.data.Data:
     """
     Take a SMILES string and encode it into a torch_geometric.data.Data object.
     One hot encode the node and edge features.
@@ -337,48 +353,27 @@ def process_encode_graph(smiles, encoding_option = 'all') -> torch_geometric.dat
     Args:
     smiles (str): SMILES string of the molecule.
     encoding_option (str): Option for which dataset to use. Must be either 'all' or 'reduced'. Used in node_encoder.
+    kekulize (bool): If True, kekulize the molecule before conversion and encode the bond type into a 3-dimensional vector.
+
+    Returns:
+    encoded_data (torch_geometric.data.Data): A PyTorch Geometric Data object representing the molecule with encoded node and edge features.
     """
     charge = False
     if encoding_option == 'charged':
         charge = True
-    data = smiles_to_torch_geometric(smiles, charge=charge)
+    data = smiles_to_torch_geometric(smiles, charge=charge, kekulize=kekulize)
 
     node_features = data.x
     edge_attr = data.edge_attr
 
-    #encode the node features with the function node encoder one atom at a time
+    # Encode the node features with the function node_encoder one atom at a time
     node_features = torch.stack([node_encoder(atom, encoding_option) for atom in node_features])
-    
-    #encore the edge features with the function edge encoder one bond at a time
-    edge_attr = torch.stack([edge_encoder(bond) for bond in edge_attr])
 
-    #create new data object with the encoded node and edge features
+    # Encode the edge features with the function edge_encoder one bond at a time
+    edge_attr = torch.stack([edge_encoder(bond, kekulize=kekulize) for bond in edge_attr])
 
+    # Create new data object with the encoded node and edge features
     encoded_data = Data(x=node_features, edge_attr=edge_attr, edge_index=data.edge_index)
 
     return encoded_data
-
-
-def encode_graph_data(graph, terminal_node_info, node_encoder, edge_encoder):
-    """
-    Encode the graph data into a format that can be used by the neural network.
-    DEPRECATED I THINK
-    """
-
-    # Encode the node features
-    node_features = torch.zeros(graph.num_nodes, 10)
-    for i in range(graph.num_nodes):
-        node_features[i] = node_encoder(graph.x[i])
-        if i == terminal_node_info[0]:
-            node_features[i][9] = 1
-        
-    
-    # Encode the edge features
-    edge_features = torch.zeros(graph.num_edges, 4)
-    for i in range(graph.num_edges):
-        edge_features[i] = edge_encoder(graph.edge_attr[i])
-
-    encoded_graph = Data(x=node_features, edge_index=graph.edge_index, edge_attr=edge_features)
-
-    return encoded_graph
 

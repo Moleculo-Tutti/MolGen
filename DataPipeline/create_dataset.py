@@ -48,7 +48,7 @@ def main():
     filtered_list = remove_charged_atoms(remove_P(zinc_df)['smiles'].to_list())
 
     for smiles in tqdm(filtered_list):
-        data = process_encode_graph(smiles, 'charged')
+        data = process_encode_graph(smiles, 'charged', kekulize=True)
         preprocessed_graph.append(data)
 
     # Separate data into train, validation and test sets
@@ -56,9 +56,9 @@ def main():
     X_train, X_val = train_test_split(X_train_val, test_size=0.1111, random_state=42)
 
     # Save data sets into files
-    torch.save(X_train, 'data/preprocessed_graph_train_charged.pt')
-    torch.save(X_val, 'data/preprocessed_graph_val_charged.pt')
-    torch.save(X_test, 'data/preprocessed_graph_test_charged.pt')
+    torch.save(X_train, 'data/preprocessed_graph_train_charged_kekulized.pt')
+    torch.save(X_val, 'data/preprocessed_graph_val_charged_kekulized.pt')
+    torch.save(X_test, 'data/preprocessed_graph_test_charged_kekulized.pt')
 
 if __name__ == "__main__":
     main()

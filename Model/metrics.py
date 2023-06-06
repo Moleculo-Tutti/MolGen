@@ -20,7 +20,7 @@ def pseudo_accuracy_metric(model_output, target, random = False):
     return correct
 
 
-def pseudo_accuracy_metric_gnn3(model_input, model_output, target, mask, random = True):
+def pseudo_accuracy_metric_gnn3(model_input, model_output, target, mask, edge_size):
     
     num_wanted_cycles = 0
     cycles_created = 0
@@ -53,37 +53,37 @@ def pseudo_accuracy_metric_gnn3(model_input, model_output, target, mask, random 
 
         # compute softmax output 
         current_graph_output_masked = F.softmax(current_graph_output[mask_graph], dim=1)
-        sum_on_first_three_dims = current_graph_output_masked[:, :3].sum(dim=1)
+        sum_on_first_dims = current_graph_output_masked[:, :edge_size - 1].sum(dim=1)
 
 
         # if sum on first three dims is empty return 0
-        if sum_on_first_three_dims.size()[0] == 0:
+        if sum_on_first_dims.size()[0] == 0:
             continue
         # Trouver l'indice du node avec la plus grande somme
-        max_index = torch.argmax(sum_on_first_three_dims)
+        max_index = torch.argmax(sum_on_first_dims)
         # Select in current_graph_output_masked thehighest value 
 
         vector_predicted = current_graph_output_masked[max_index]
         prediction= torch.multinomial(vector_predicted, 1)
 
-        if torch.sum(current_graph_target[:,:3].max(dim=1)[0]) > 0: 
+        if torch.sum(current_graph_target[:,:edge_size - 1].max(dim=1)[0]) > 0: 
             # the graph has a cycle
             has_cycle = True
             num_wanted_cycles +=1
         
         
-        if has_cycle and prediction < 3 :
+        if has_cycle and prediction < edge_size - 1 :
             # look if we have predicted one cycle (first 3 in the vector of 4) in this molecul
             cycles_created +=1
-            if torch.argmax(current_graph_target[mask_graph][max_index])<3 :
+            if torch.argmax(current_graph_target[mask_graph][max_index])<  edge_size - 1 :
                 good_cycles_created += 1
                 if prediction == torch.argmax(current_graph_target[mask_graph][max_index]):
                     good_types_cycles_predicted += 1
 
-        if has_cycle and prediction == 3:
+        if has_cycle and prediction ==  edge_size - 1:
             cycles_not_created +=1
 
-        if not(has_cycle) and prediction < 3 :
+        if not(has_cycle) and prediction <  edge_size - 1 :
             cycles_shouldnt_created += 1
 
         has_cycle = False

@@ -72,7 +72,6 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoc
 
         # Use node_labels_indices with CrossEntropyLoss
         #loss = criterion(out, node_labels, mask)
-
         loss = criterion(out[mask], node_labels[mask])
     
         loss.backward()
@@ -84,7 +83,7 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoc
 
         if epoch_metric:
 
-            cycles_created, well_placed_cycles , well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles = pseudo_accuracy_metric_gnn3(data,out,node_labels,mask)        
+            cycles_created, well_placed_cycles , well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles = pseudo_accuracy_metric_gnn3(data,out,node_labels,mask, edge_size = size_edge)      
             # Calculate metrics and move tensors to CPU
             num_output += torch.sum(softmax_out[mask], dim=0).detach().cpu()
             num_labels += torch.sum(node_labels[mask], dim=0).detach().cpu()
@@ -169,7 +168,7 @@ def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False,
                 softmax_out = F.softmax(out, dim=1)
 
                 cycles_created, well_placed_cycles, well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles = pseudo_accuracy_metric_gnn3(
-                    data, out, node_labels, mask)
+                    data, out, node_labels, mask, edge_size=size_edge)
 
                 num_output += torch.sum(softmax_out[mask], dim=0).detach().cpu()
                 num_labels += torch.sum(node_labels[mask], dim=0).detach().cpu()
@@ -262,7 +261,7 @@ class TrainGNN3():
                                                 hidden_channels_list=self.GCN_size,
                                                 mlp_hidden_channels=self.mlp_hidden,
                                                 edge_channels=edge_size, 
-                                                num_classes=4,
+                                                num_classes=edge_size,
                                                 use_dropout=self.use_dropout)
         else:
             model = ModelWithEdgeFeatures(in_channels=encoding_size + int(self.feature_position), # We increase the input size to take into account the feature position

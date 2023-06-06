@@ -140,14 +140,14 @@ class ZincSubgraphDatasetStep(Dataset):
             subgraph.edge_attr = torch.cat([subgraph.edge_attr, edge_neighbor_attr.unsqueeze(0), edge_neighbor_attr.unsqueeze(0)], dim=0)
 
 
-            node_features_label = torch.zeros(len(subgraph.x), 4) #there is no triple bond for closing the cycle
+            node_features_label = torch.zeros(len(subgraph.x), self.edge_size) #there is no triple bond for closing the cycle
 
             # put ones in the last column of the node_features_label for the terminal node (put stop everywhere)
             node_features_label[:, -1] = 1
 
             if len(terminal_nodes[1][id_chosen][3]) != 0:
                 for cycle_neighbor in terminal_nodes[1][id_chosen][3]:
-                    node_features_label[id_map[cycle_neighbor[0]]][:3] = cycle_neighbor[1][:3]
+                    node_features_label[id_map[cycle_neighbor[0]]][:self.edge_size - 1] = cycle_neighbor[1][:self.edge_size - 1]
                     node_features_label[id_map[cycle_neighbor[0]]][-1] = 0
 
             mask = torch.cat((torch.zeros(node1 + 1), torch.ones(len(subgraph.x) - node1 - 1)), dim=0).bool()
