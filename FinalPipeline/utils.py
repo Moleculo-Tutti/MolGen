@@ -16,8 +16,11 @@ sys.path.append(parent_dir)
 from DataPipeline.preprocessing import process_encode_graph, get_subgraph_with_terminal_nodes_step
 from DataPipeline.preprocessing import node_encoder
 from Model.GNN1 import ModelWithEdgeFeatures as GNN1
+from Model.GNN1 import ModelWithNodeConcat as GNN1_node_concat
 from Model.GNN2 import ModelWithEdgeFeatures as GNN2
+from Model.GNN2 import ModelWithNodeConcat as GNN2_node_concat
 from Model.GNN3 import ModelWithEdgeFeatures as GNN3
+from Model.GNN3 import ModelWithgraph_embedding_modif as GNN3_embedding
 
 def tensor_to_smiles(node_features, edge_index, edge_attr):
     # Create an empty editable molecule
@@ -128,6 +131,14 @@ def get_model_GNN2(config, encoding_size):
                 use_dropout=config['use_dropout'])
 
 def get_model_GNN3(config, encoding_size):
+
+    if config['graph_embedding']:
+        return GNN3_embedding(in_channels=encoding_size + int(config['feature_position']),
+                    hidden_channels_list=config["GCN_size"],
+                    mlp_hidden_channels = config['mlp_hidden'],
+                    edge_channels=4, 
+                    num_classes=4,
+                    use_dropout=config['use_dropout'])
 
     return GNN3(in_channels=encoding_size + int(config['feature_position']), 
                 hidden_channels_list=config["GCN_size"],
@@ -277,6 +288,10 @@ class MolGen():
         self.device = device
         self.feature_position = feature_position
         self.encoding_size = encoding_size
+        self.save_intermidiate_states = save_intermidiate_states
+        if save_intermidiate_states:
+            self.intermidiate_states = []
+        
 
     def one_step(self):
         with torch.no_grad():
@@ -371,19 +386,38 @@ class MolGen():
             self.mol_graph = output_graph
 
     def full_generation(self):
+        max_iter = 100
+        i = 0
         while len(self.queue) > 0:
+            if i > max_iter:
+                break
             self.one_step()
+            i += 1
 
-
+            if self.save_intermidiate_states:
+                self.intermidiate_states.append(self.mol_graph.clone())
+        
+    def is_valid(self):
+        SMILES_str = tensor_to_smiles(self.mol_graph.x, self.mol_graph.edge_index, self.mol_graph.edge_attr)
+        mol = Chem.MolFromSmiles(SMILES_str)
+        if mol is None:
+            return False
+        else:
+            return True
 
 
 class GenerationModule():
-    def __init__(self, config1, config2, config3, encoding_size, pathGNN1, pathGNN2, pathGNN3):
+    def __init__(self, config1, config2, config3, encoding_size, pathGNN1, pathGNN2, pathGNN3, checking_mode = False):
         self.config1 = config1
         self.config2 = config2
         self.config3 = config3
         self.encoding_size = encoding_size
         self.feature_position = config1["feature_position"]
+        self.checking_mode = checking_mode
+
+        if self.checking_mode:
+            self.non_valid_molecules = []
+
         self.GNN1 = get_model_GNN1(config1, encoding_size)
         self.GNN2 = get_model_GNN2(config2, encoding_size)
         self.GNN3 = get_model_GNN3(config3, encoding_size)
@@ -408,8 +442,12 @@ class GenerationModule():
     def generate_mol_list(self, n_mol):
         mol_list = []
         for i in tqdm(range(n_mol)):
-            mol = MolGen(self.GNN1_model, self.GNN2_model, self.GNN3_model, self.encoding_size, self.feature_position, self.device)
+            mol = MolGen(self.GNN1_model, self.GNN2_model, self.GNN3_model, self.encoding_size, self.feature_position, self.device, save_intermidiate_states = self.checking_mode)
             mol.full_generation()
+            if self.checking_mode:
+                # check validity of the molecule 
+                if not mol.is_valid():
+                    self.non_valid_molecules.append(mol.intermidiate_states)
             mol_list.append(mol.mol_graph)
         return mol_list
 

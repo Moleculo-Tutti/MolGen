@@ -117,6 +117,8 @@ def plot_graph(G, show_atom_ids=True, show_atom_types=True, show_edge_types=True
             conversion_atom_num_to_symbol = {0: 'C', 1: 'N', 2: 'O', 3: 'F', 4: 'P', 5: 'S', 6: 'Cl', 7: 'Br', 8: 'I'}
         elif encoding_type == 'reduced':
             conversion_atom_num_to_symbol = {0: 'C', 1: 'N', 2: 'O', 3: 'F', 4: 'S', 5: 'Cl'}
+        elif encoding_type == 'charged':
+            conversion_atom_num_to_symbol = {0: 'C', 1: 'N', 2: 'N+', 3: 'N-', 4:'O', 5:'O-', 6:'F', 8:'S', 9:'S-', 10:'Cl', 11:'Br', 12:'I'}
 
     # Prepare node labels
     labels = {}

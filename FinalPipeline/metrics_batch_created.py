@@ -51,6 +51,8 @@ def plot_molecule_sizes(smiles_series):
     plt.hist(molecule_sizes, bins=20)
     plt.xlabel('Molecule Size')
     plt.ylabel('Frequency')
+    # xlimit to 50
+    plt.xlim(0, 50)
     plt.title('Molecule Size Distribution')
     plt.show()
 

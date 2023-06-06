@@ -41,7 +41,7 @@ def main(args):
 
     GNN1_path = Path('.') / 'models/trained_models/checkpoint_epoch_960_GNN1_charged.pt'
     GNN2_path = Path('.') / 'models/trained_models/checkpoint_epoch_960_GNN2_charged.pt'
-    GNN3_path = Path('.') / 'models/trained_models/checkpoint_epoch_220_GNN3_charged.pt'
+    GNN3_path = Path('.') / 'models/trained_models/checkpoint_epoch_200_GNN3_charged.pt'
 
     module = GenerationModule(config1=config1, config2=config2, config3=config3, encoding_size = 13, pathGNN1=GNN1_path, pathGNN2=GNN2_path, pathGNN3=GNN3_path)
 
