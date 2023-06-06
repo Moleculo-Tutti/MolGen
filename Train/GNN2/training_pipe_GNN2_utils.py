@@ -167,91 +167,6 @@ def eval_one_epoch(loader, model, edge_size, device, criterion, print_bar = Fals
 
 
 
-def train_GNN2(name : str, datapath_train, datapath_val, n_epochs,  encoding_size, GCN_size : list, mlp_size, edge_size = 4, feature_position = True, use_dropout = False, lr = 0.0001 , print_bar = False, batch_size = 128, num_workers = 0):
-
-    dataset_train = ZincSubgraphDatasetStep(data_path = datapath_train, GNN_type=2)
-    dataset_val = ZincSubgraphDatasetStep(data_path = datapath_val, GNN_type=2)
-    if feature_position :
-        loader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, collate_fn=custom_collate_passive_add_feature_GNN2, num_workers=num_workers)
-        loader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, collate_fn=custom_collate_passive_add_feature_GNN2, num_workers=num_workers)
-        model = ModelWithEdgeFeatures(in_channels=encoding_size + 1, hidden_channels_list= GCN_size, mlp_hidden_channels=mlp_size, edge_channels=edge_size, num_classes=edge_size, use_dropout=use_dropout)
-    else :
-        loader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, collate_fn=custom_collate_GNN2, num_workers=num_workers)
-        loader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, collate_fn=custom_collate_GNN2, num_workers=num_workers)
-        model = ModelWithEdgeFeatures(in_channels=encoding_size, hidden_channels_list= GCN_size, mlp_hidden_channels=mlp_size, edge_channels=edge_size, num_classes=edge_size, use_dropout=use_dropout)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = model.to(device)
-    optimizer = AdamW(model.parameters(), lr=lr)
-
-    # Set up the loss function for multiclass 
-    criterion = nn.CrossEntropyLoss()
-    training_history = pd.DataFrame(columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector', 'avg_correct', 'precision', 'recall'])
-    eval_history = pd.DataFrame(columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector', 'avg_correct', 'precision', 'recall'])
-
-    directory_path_experience = os.path.join("./experiments", name)
-    directory_path_epochs = os.path.join(directory_path_experience,"history_training")
-    if not os.path.exists(directory_path_experience):
-        # Create the directory if it doesn't exist
-        os.makedirs(directory_path_experience)
-        print(f"The '{name}' directory has been successfully created in the 'experiments' directory.")
-    else:
-        # Display a message if the directory already exists
-        print(f"The '{name}' directory already exists in the 'experiments' directory.")
-
-    if not os.path.exists(directory_path_epochs) :
-        os.makedirs(directory_path_epochs)
-    
-    file_path = os.path.join(directory_path_experience, "parameters.txt")
-    
-    parameters = {
-    "datapath_train": datapath_train,
-    "datapath_val": datapath_val,
-    "n_epochs": n_epochs,
-    "encoding_size": encoding_size,
-    "GCN_size": GCN_size,
-    "mlp_size": mlp_size,
-    "edge_size": edge_size,
-    "feature_position": feature_position,
-    "use_dropout": use_dropout,
-    "lr": lr,
-    "print_bar": print_bar
-    }
-    with open(file_path, "w") as file:
-        for param, value in parameters.items():
-            # Convert lists to strings if necessary
-            if isinstance(value, list):
-                value = ', '.join(str(item) for item in value)
-            line = f"{param}: {value}\n"
-            file.write(line)
-
-    #beginning the epoch
-    for epoch in tqdm(range(0, n_epochs+1)):
-        loss, avg_label_vector, avg_output_vector, avg_correct, avg_correct_precision, avg_correct_recall = train_one_epoch(
-            loader_train, model, edge_size, device, optimizer, criterion, print_bar = print_bar)
-        training_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, avg_correct, avg_correct_precision, avg_correct_recall]
-        loss, avg_label_vector, avg_output_vector, avg_correct, avg_correct_precision, avg_correct_recall = eval_one_epoch(
-            loader_val, model, edge_size, device, optimizer, criterion)
-        eval_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, avg_correct, avg_correct_precision, avg_correct_recall]
-
-    #save the model(all with optimizer step, the loss ) every 5 epochs
-
-        save_every_n_epochs = 20
-        if (epoch) % save_every_n_epochs == 0:
-            checkpoint = {
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                # Add any other relevant information you want to save here
-            }
-            epoch_save_file = os.path.join(directory_path_epochs, f'checkpoint_epoch_{epoch}_{name}.pt')
-            torch.save(checkpoint, epoch_save_file)
-
-        training_csv_directory = os.path.join(directory_path_experience, 'training_history.csv')    
-        training_history.to_csv(training_csv_directory)
-
-        eval_csv_directory = os.path.join(directory_path_experience, 'eval_history.csv')    
-        eval_history.to_csv(eval_csv_directory)
-
 class TrainGNN2():
     def __init__(self, config):
         self.config = config
@@ -285,6 +200,9 @@ class TrainGNN2():
         self.eval_history = pd.DataFrame(columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector', 'avg_correct', 'precision', 'recall'])
 
         self.prepare_saving()
+
+        # Store the 6 best models
+        self.six_best_eval_loss = [(0, float('inf'))] * 6
 
     def load_data_model(self):
         # Load the data
@@ -345,7 +263,8 @@ class TrainGNN2():
     def train(self):
 
         for epoch in tqdm(range(0, self.n_epochs+1)):
-            
+            torch.cuda.empty_cache()
+            save_epoch = False
             if epoch % self.every_epoch_metric == 0:
                 loss, avg_label_vector, avg_output_vector, avg_correct, avg_correct_precision, avg_correct_recall = train_one_epoch(
                     loader=self.loader_train,
@@ -369,6 +288,15 @@ class TrainGNN2():
                     val_metric_size = self.val_metric_size)
                 
                 self.eval_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, avg_correct, avg_correct_precision, avg_correct_recall]
+                
+                # Check if the loss is better than one of the 6 best losses (compare only along the second dimension of the tuples)
+
+                if loss < max(self.six_best_eval_loss, key=lambda x: x[1])[1]:
+                    # switch the save variable to True
+                    save_epoch = True
+                    index_max = self.six_best_eval_loss.index(max(self.six_best_eval_loss, key=lambda x: x[1]))
+                    self.six_best_eval_loss[index_max] = (epoch, loss)
+            
             else:
                 loss, _, _, _, _, _ = train_one_epoch(
                     loader=self.loader_train,
@@ -383,14 +311,14 @@ class TrainGNN2():
                 self.training_history.loc[epoch] = [epoch, loss, None, None, None, None, None]
                 self.eval_history.loc[epoch] = [epoch, None, None, None, None, None, None]
 
-            if (epoch) % self.every_epoch_save == 0:
+            if save_epoch:
                 checkpoint = {
                     'epoch': epoch,
                     'model_state_dict': self.model.state_dict(),
                     'optimizer_state_dict': self.optimizer.state_dict(),
                     # Add any other relevant information you want to save here
                 }
-                epoch_save_file = os.path.join(self.directory_path_epochs, f'checkpoint_epoch_{epoch}_{self.name}.pt')
+                epoch_save_file = os.path.join(self.directory_path_epochs, f'checkpoint_{index_max}.pt')
                 torch.save(checkpoint, epoch_save_file)
 
                 training_csv_directory = os.path.join(self.directory_path_experience, 'training_history.csv')    
@@ -398,3 +326,9 @@ class TrainGNN2():
 
                 eval_csv_directory = os.path.join(self.directory_path_experience, 'eval_history.csv')    
                 self.eval_history.to_csv(eval_csv_directory)
+
+                # Create a txt file containing the infos about the six best epochs saved 
+                six_best_epochs_file = os.path.join(self.directory_path_experience, 'six_best_epochs.txt')
+                with open(six_best_epochs_file, 'w') as file:
+                    for epoch, loss in self.six_best_eval_loss:
+                        file.write(f'Epoch {epoch} with loss {loss}\n')

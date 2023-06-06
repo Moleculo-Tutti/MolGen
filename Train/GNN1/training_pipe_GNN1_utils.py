@@ -201,6 +201,9 @@ class TrainGNN1():
 
         self.prepare_saving()
 
+        # Store the 6 best models
+        self.six_best_eval_loss = [(0, float('inf'))] * 6
+
     def load_data_model(self):
         # Load the data
         dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=1, feature_position=self.feature_position)
@@ -262,7 +265,8 @@ class TrainGNN1():
     def train(self):
 
         for epoch in tqdm(range(0, self.n_epochs+1)):
-            
+            torch.cuda.empty_cache()
+            save_epoch = False
             if epoch % self.every_epoch_metric == 0:
                 loss, avg_label_vector, avg_output_vector, avg_correct, avg_correct_precision, avg_correct_recall = train_one_epoch(
                     loader=self.loader_train,
@@ -286,6 +290,15 @@ class TrainGNN1():
                     val_metric_size = self.val_metric_size)
                 
                 self.eval_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, avg_correct, avg_correct_precision, avg_correct_recall]
+            
+                # Check if the loss is better than one of the 6 best losses (compare only along the second dimension of the tuples)
+
+                if loss < max(self.six_best_eval_loss, key=lambda x: x[1])[1]:
+                    # switch the save variable to True
+                    save_epoch = True
+                    index_max = self.six_best_eval_loss.index(max(self.six_best_eval_loss, key=lambda x: x[1]))
+                    self.six_best_eval_loss[index_max] = (epoch, loss)
+            
             else:
                 loss, _, _, _, _, _ = train_one_epoch(
                     loader=self.loader_train,
@@ -300,14 +313,14 @@ class TrainGNN1():
                 self.training_history.loc[epoch] = [epoch, loss, None, None, None, None, None]
                 self.eval_history.loc[epoch] = [epoch, None, None, None, None, None, None]
 
-            if (epoch) % self.every_epoch_save == 0:
+            if save_epoch:
                 checkpoint = {
                     'epoch': epoch,
                     'model_state_dict': self.model.state_dict(),
                     'optimizer_state_dict': self.optimizer.state_dict(),
                     # Add any other relevant information you want to save here
                 }
-                epoch_save_file = os.path.join(self.directory_path_epochs, f'checkpoint_epoch_{epoch}_{self.name}.pt')
+                epoch_save_file = os.path.join(self.directory_path_epochs, f'checkpoint_{index_max}.pt')
                 torch.save(checkpoint, epoch_save_file)
 
                 training_csv_directory = os.path.join(self.directory_path_experience, 'training_history.csv')    
@@ -315,6 +328,12 @@ class TrainGNN1():
 
                 eval_csv_directory = os.path.join(self.directory_path_experience, 'eval_history.csv')    
                 self.eval_history.to_csv(eval_csv_directory)
+
+                # Create a txt file containing the infos about the six best epochs saved 
+                six_best_epochs_file = os.path.join(self.directory_path_experience, 'six_best_epochs.txt')
+                with open(six_best_epochs_file, 'w') as file:
+                    for epoch, loss in self.six_best_eval_loss:
+                        file.write(f'Epoch {epoch} with loss {loss}\n')
 
 
     
