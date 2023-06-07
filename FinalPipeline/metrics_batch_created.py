@@ -20,7 +20,7 @@ def calculate_novelty(batch_smiles_uniq, zinc_mol_list):
             non_new_molecules.append(smiles)
     
     novelty = 1 - len(non_new_molecules) / len(batch_smiles_uniq)
-    return novelty
+    return novelty, non_new_molecules
 
 
 def calculate_validity(batch_smiles):

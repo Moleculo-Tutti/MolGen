@@ -22,7 +22,7 @@ from Model.GNN2 import ModelWithNodeConcat as GNN2_node_concat
 from Model.GNN3 import ModelWithEdgeFeatures as GNN3
 from Model.GNN3 import ModelWithgraph_embedding_modif as GNN3_embedding
 
-def tensor_to_smiles(node_features, edge_index, edge_attr):
+def tensor_to_smiles(node_features, edge_index, edge_attr, edge_mapping = 'aromatic'):
     # Create an empty editable molecule
     mol = Chem.RWMol()
 
@@ -51,12 +51,19 @@ def tensor_to_smiles(node_features, edge_index, edge_attr):
         mol.AddAtom(atom)
 
     # Define bond type mapping
-    bond_mapping = {
-        0: Chem.rdchem.BondType.AROMATIC,
-        1: Chem.rdchem.BondType.SINGLE,
-        2: Chem.rdchem.BondType.DOUBLE,
-        3: Chem.rdchem.BondType.TRIPLE,
-    }
+    if edge_mapping == 'aromatic':
+        bond_mapping = {
+            0: Chem.rdchem.BondType.AROMATIC,
+            1: Chem.rdchem.BondType.SINGLE,
+            2: Chem.rdchem.BondType.DOUBLE,
+            3: Chem.rdchem.BondType.TRIPLE,
+        }
+    elif edge_mapping == 'kekulized':
+        bond_mapping = {
+            0: Chem.rdchem.BondType.SINGLE,
+            1: Chem.rdchem.BondType.DOUBLE,
+            2: Chem.rdchem.BondType.TRIPLE,
+        }
 
     # Add bonds
     for start, end, bond_attr in zip(edge_index[0], edge_index[1], edge_attr):
@@ -94,12 +101,12 @@ def sample_first_atom(encoding = 'reduced'):
     
     return random.choices(list(prob_dict.keys()), weights=list(prob_dict.values()))[0]
 
-def create_torch_graph_from_one_atom(atom, encoding_option='reduced'):
+def create_torch_graph_from_one_atom(atom, edge_size, encoding_option='reduced'):
     num_atom = int(atom)
 
     atom_attribute = node_encoder(num_atom, encoding_option=encoding_option)
     # Create graph
-    graph = torch_geometric.data.Data(x=atom_attribute.view(1, -1), edge_index=torch.empty((2, 0), dtype=torch.long), edge_attr=torch.empty((0, 4)))
+    graph = torch_geometric.data.Data(x=atom_attribute.view(1, -1), edge_index=torch.empty((2, 0), dtype=torch.long), edge_attr=torch.empty((0, edge_size)))
 
     return graph
 
@@ -111,38 +118,38 @@ def load_model(checkpoint_path, model, optimizer):
     
     return model, optimizer
 
-def get_model_GNN1(config, encoding_size):
+def get_model_GNN1(config, encoding_size, edge_size):
 
     return GNN1(in_channels=encoding_size + int(config['feature_position']),
                 hidden_channels_list=config["GCN_size"],
                 mlp_hidden_channels=config['mlp_hidden'],
-                edge_channels=4, 
+                edge_channels=edge_size, 
                 num_classes=encoding_size, 
                 use_dropout=config['use_dropout'],
                 size_info=config['use_size'])
 
-def get_model_GNN2(config, encoding_size):
+def get_model_GNN2(config, encoding_size, edge_size):
 
     return GNN2(in_channels=encoding_size + int(config['feature_position']), 
                 hidden_channels_list=config["GCN_size"],
                 mlp_hidden_channels=config['mlp_hidden'],
-                edge_channels=4, 
-                num_classes=4, 
+                edge_channels=edge_size, 
+                num_classes=edge_size, 
                 use_dropout=config['use_dropout'])
 
-def get_model_GNN3(config, encoding_size):
+def get_model_GNN3(config, encoding_size, edge_size):
 
     if config['graph_embedding']:
         return GNN3_embedding(in_channels=encoding_size + int(config['feature_position']),
                     hidden_channels_list=config["GCN_size"],
                     mlp_hidden_channels = config['mlp_hidden'],
-                    edge_channels=4, 
-                    num_classes=4,
+                    edge_channels=edge_size, 
+                    num_classes=edge_size,
                     use_dropout=config['use_dropout'])
 
     return GNN3(in_channels=encoding_size + int(config['feature_position']), 
                 hidden_channels_list=config["GCN_size"],
-                edge_channels=4, 
+                edge_channels=edge_size, 
                 use_dropout=config['use_dropout'])
 
 def get_optimizer(model, lr):
@@ -183,103 +190,19 @@ def add_edge_or_node_to_graph(graph, initial_node, edge_attr, other_node=None, n
 
     return graph
 
-def select_node(tensor):
+def select_node(tensor, edge_size):
 
     # Somme sur les 3 premières dimensions de chaque vecteur
-    sum_on_first_three_dims = tensor[:, :3].sum(dim=1)
+    sum_on_first_dims = tensor[:, :edge_size - 1].sum(dim=1)
 
     # Trouver l'indice du node avec la plus grande somme
-    max_index = torch.argmax(sum_on_first_three_dims)
+    max_index = torch.argmax(sum_on_first_dims)
 
     return tensor[max_index], max_index
 
-def one_step(input_graph, queue : list, GNN1, GNN2, GNN3, device):
-
-    with torch.no_grad():
-        current_node = queue[0]
-
-        graph1 = input_graph.clone()
-        graph1.x[current_node, -1] = 1
-        # add one column to graph1.x
-
-        graph1.x = torch.cat([graph1.x, torch.zeros(graph1.x.size(0), 1)], dim=1)
-        
-        graph1.x[0:current_node, -1] = 1
-
-        prediction = GNN1(graph1.to(device))
-
-        # Sample next node from prediction
-
-        predicted_node = torch.multinomial(F.softmax(prediction, dim=1), 1).item()
-        if predicted_node == 6:
-            #Stop 
-            queue.pop(0)
-            return input_graph, queue
-
-        # Encode next node
-        encoded_predicted_node = torch.zeros(prediction.size(), dtype=torch.float)
-        encoded_predicted_node[0, predicted_node] = 1
-
-        queue.append(graph1.x.size(0)) # indexing starts at 0
-
-        # GNN2
-
-        graph2 = input_graph.clone()
-        graph2.x[current_node, -1] = 1
-
-        # add a zeros to neighbor 
-        encoded_predicted_node = torch.cat([encoded_predicted_node, torch.zeros(1, 1)], dim=1)
-
-        graph2.neighbor = encoded_predicted_node
-       
-
-
-        # Add a new column indicating the nodes that have been finalized
-        graph2.x = torch.cat([graph2.x, torch.zeros(graph2.x.size(0), 1)], dim=1)
-        graph2.x[0:current_node, -1] = 1
-
-        prediction2 = GNN2(graph2.to(device))
-        predicted_edge = torch.multinomial(F.softmax(prediction2, dim=1), 1).item()
-        encoded_predicted_edge = torch.zeros(prediction2.size(), dtype=torch.float)
-        encoded_predicted_edge[0, predicted_edge] = 1
-        # GNN3
-
-        new_graph = add_edge_or_node_to_graph(input_graph.clone(), current_node, encoded_predicted_edge, new_node_attr = encoded_predicted_node[:, :-1])
-        graph3 = new_graph.clone()
-        # Add a one of the last node that are going to possibly bond to another node
-        graph3.x[-1, -1] = 1
-        #Add a new column indicating the nodes that have been finalized
-        graph3.x = torch.cat([graph3.x, torch.zeros(graph3.x.size(0), 1)], dim=1)
-        graph3.x[0:current_node, -1] = 1
-
-        mask = torch.cat((torch.zeros(current_node + 1), torch.ones(len(graph3.x) - current_node - 1)), dim=0).bool()
-        mask[-1] = False
-        graph3.mask = mask
-        prediction3 = GNN3(graph3.to(device))
-        softmax_prediction3 = F.softmax(prediction3, dim=1)[graph3.mask]
-        if softmax_prediction3.size(0) == 0:
-            #Stop
-            return new_graph, queue
-        selected_edge_distribution, max_index = select_node(softmax_prediction3)
-
-
-        #sample edge
-        predicted_edge = torch.multinomial(selected_edge_distribution, 1).item()
-        
-        if predicted_edge == 3:
-            #Stop
-            return new_graph, queue
-        
-        encoded_predicted_edge = torch.zeros(prediction2.size(), dtype=torch.float)
-        encoded_predicted_edge[0, predicted_edge] = 1
-
-
-        output_graph = add_edge_or_node_to_graph(new_graph, graph1.x.size(0), encoded_predicted_edge, other_node=current_node + max_index+1)
-        return output_graph, queue
-
 class MolGen():
-    def __init__(self, GNN1, GNN2, GNN3, encoding_size, feature_position, device, save_intermidiate_states = False):
-        mol_graph = create_torch_graph_from_one_atom(sample_first_atom(), encoding_option='charged')
+    def __init__(self, GNN1, GNN2, GNN3, encoding_size, edge_size, feature_position, device, save_intermidiate_states = False):
+        mol_graph = create_torch_graph_from_one_atom(sample_first_atom(), edge_size=edge_size, encoding_option='charged')
         self.mol_graph = torch_geometric.data.Batch.from_data_list([mol_graph])
         self.queue = [0]
         self.GNN1 = GNN1
@@ -288,6 +211,7 @@ class MolGen():
         self.device = device
         self.feature_position = feature_position
         self.encoding_size = encoding_size
+        self.edge_size = edge_size
         self.save_intermidiate_states = save_intermidiate_states
         if save_intermidiate_states:
             self.intermidiate_states = []
@@ -306,6 +230,7 @@ class MolGen():
                 #add feature position
                 graph1.x = torch.cat([graph1.x, torch.zeros(graph1.x.size(0), 1)], dim=1)
                 graph1.x[0:current_node, -1] = 1
+
             prediction = self.GNN1(graph1.to(self.device))
             # Sample next node from prediction
             predicted_node = torch.multinomial(F.softmax(prediction, dim=1), 1).item()
@@ -367,12 +292,12 @@ class MolGen():
                 self.mol_graph = new_graph
                 return
 
-            selected_edge_distribution, max_index = select_node(softmax_prediction3)
+            selected_edge_distribution, max_index = select_node(softmax_prediction3, edge_size=self.edge_size)
 
              #sample edge
             predicted_edge = torch.multinomial(selected_edge_distribution, 1).item()
 
-            if predicted_edge == 3:
+            if predicted_edge == self.edge_size - 1:
                 #Stop
                 self.mol_graph = new_graph
                 return
@@ -398,7 +323,11 @@ class MolGen():
                 self.intermidiate_states.append(self.mol_graph.clone())
         
     def is_valid(self):
-        SMILES_str = tensor_to_smiles(self.mol_graph.x, self.mol_graph.edge_index, self.mol_graph.edge_attr)
+        if self.edge_size == 3:
+            edge_mapping = 'kekulized'
+        else:
+            edge_mapping = 'aromatic'
+        SMILES_str = tensor_to_smiles(self.mol_graph.x, self.mol_graph.edge_index, self.mol_graph.edge_attr, edge_mapping)
         mol = Chem.MolFromSmiles(SMILES_str)
         if mol is None:
             return False
@@ -407,20 +336,21 @@ class MolGen():
 
 
 class GenerationModule():
-    def __init__(self, config1, config2, config3, encoding_size, pathGNN1, pathGNN2, pathGNN3, checking_mode = False):
+    def __init__(self, config1, config2, config3, encoding_size, edge_size, pathGNN1, pathGNN2, pathGNN3, checking_mode = False):
         self.config1 = config1
         self.config2 = config2
         self.config3 = config3
         self.encoding_size = encoding_size
+        self.edge_size = edge_size
         self.feature_position = config1["feature_position"]
         self.checking_mode = checking_mode
 
         if self.checking_mode:
             self.non_valid_molecules = []
 
-        self.GNN1 = get_model_GNN1(config1, encoding_size)
-        self.GNN2 = get_model_GNN2(config2, encoding_size)
-        self.GNN3 = get_model_GNN3(config3, encoding_size)
+        self.GNN1 = get_model_GNN1(config1, encoding_size, edge_size)
+        self.GNN2 = get_model_GNN2(config2, encoding_size, edge_size)
+        self.GNN3 = get_model_GNN3(config3, encoding_size, edge_size)
 
         self.optimizer_GNN1 = torch.optim.Adam(self.GNN1.parameters(), lr=config1["lr"])
         self.optimizer_GNN2 = torch.optim.Adam(self.GNN2.parameters(), lr=config2["lr"])
@@ -442,7 +372,7 @@ class GenerationModule():
     def generate_mol_list(self, n_mol):
         mol_list = []
         for i in tqdm(range(n_mol)):
-            mol = MolGen(self.GNN1_model, self.GNN2_model, self.GNN3_model, self.encoding_size, self.feature_position, self.device, save_intermidiate_states = self.checking_mode)
+            mol = MolGen(self.GNN1_model, self.GNN2_model, self.GNN3_model, self.encoding_size, self.edge_size, self.feature_position, self.device, save_intermidiate_states = self.checking_mode)
             mol.full_generation()
             if self.checking_mode:
                 # check validity of the molecule 

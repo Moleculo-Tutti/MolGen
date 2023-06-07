@@ -1,8 +1,8 @@
 {
-    "name": "GNN3_charged_with_node_embedding_concat_kekulized",
+    "name": "GNN3_charged_with_node_embedding_concat_kekulized_V2_1000epochs",
     "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_charged_kekulized.pt",
     "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_charged_kekulized.pt",
-    "n_epochs": 500,
+    "n_epochs": 1000,
     "GCN_size": [32, 64, 128, 128, 256, 256],
     "mlp_hidden": 128,
     "feature_position" : true,
@@ -14,5 +14,5 @@
     "every_epoch_save" : 50,
     "every_epoch_metric" : 50,
     "val_metric_size" : 5,
-    "num_workers": 16
+    "num_workers": -1
 }
