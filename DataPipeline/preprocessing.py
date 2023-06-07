@@ -295,7 +295,7 @@ def node_encoder(atom_num : float, encoding_option = 'all') -> torch.Tensor:
     Encode the atom number into a one-hot vector.
     """
     #Verify that encoding_option is among the allowed values
-    if encoding_option not in ['all', 'reduced', 'charged']:
+    if encoding_option not in ['all', 'reduced', 'charged', 'polymer']:
         raise ValueError("encoding_option must be either 'all' or 'reduced' or 'charged'.")
     
     if encoding_option == 'all':
@@ -307,6 +307,10 @@ def node_encoder(atom_num : float, encoding_option = 'all') -> torch.Tensor:
     elif encoding_option == 'charged':
         atom_mapping = {60: 0, 70:1, 71: 2, 69: 3, 80:4, 79:5, 90:6, 160:7, 159:8, 170:9, 350:10, 530:11}
         size = 12
+    elif encoding_option == 'polymer':
+        atom_mapping = {60: 0, 70: 1, 80: 2, 90: 3, 140: 4, 150: 5, 160: 6}
+        size = 7
+
 
     # Initialize the one-hot vector
     one_hot = torch.zeros(size + 1)

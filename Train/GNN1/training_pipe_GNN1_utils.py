@@ -186,6 +186,7 @@ class TrainGNN1():
         self.every_epoch_metric = config['every_epoch_metric']
         self.val_metric_size = config['val_metric_size']
         self.node_embeddings = config['node_embeddings']
+        self.max_size = config['max_size']
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Training on {self.device}")
 
@@ -223,7 +224,8 @@ class TrainGNN1():
                                       encoding_size= encoding_size,
                                       use_dropout=self.use_dropout, 
                                       size_info=self.use_size, 
-                                      num_classes=encoding_size)
+                                      num_classes=encoding_size,
+                                        max_size=self.max_size)
         else :
             # Load the model
             model = ModelWithEdgeFeatures(in_channels=encoding_size + int(self.feature_position), # We increase the input size to take into account the feature position
@@ -232,7 +234,8 @@ class TrainGNN1():
                                       edge_channels=edge_size, 
                                       use_dropout=self.use_dropout, 
                                       size_info=self.use_size, 
-                                      num_classes=encoding_size)
+                                      num_classes=encoding_size,
+                                        max_size=self.max_size)
         
         return loader_train, loader_val, model.to(self.device), encoding_size, edge_size
     

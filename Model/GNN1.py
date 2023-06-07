@@ -36,13 +36,14 @@ class CustomMessagePassingLayer(MessagePassing):
         return self.lin(x)
 
 class ModelWithEdgeFeatures(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels_list, mlp_hidden_channels, edge_channels, num_classes=10, use_dropout=True, use_batchnorm=True, size_info = True):
+    def __init__(self, in_channels, hidden_channels_list, mlp_hidden_channels, edge_channels, num_classes=10, use_dropout=True, use_batchnorm=True, size_info = True, max_size = 40):
         torch.manual_seed(12345)
         super(ModelWithEdgeFeatures, self).__init__()
 
         self.use_dropout = use_dropout
         self.use_batchnorm = use_batchnorm
         self.size_info = size_info
+        self.size_max = max_size
 
         self.message_passing_layers = torch.nn.ModuleList()
         self.batch_norm_layers = torch.nn.ModuleList()
@@ -79,7 +80,7 @@ class ModelWithEdgeFeatures(torch.nn.Module):
             # Concatenate size of each graph of the batch 
             num_nodes_per_graph = torch.bincount(data.batch).view(-1, 1).float()
             # Normalize num_node 
-            num_nodes_per_graph = num_nodes_per_graph / 40
+            num_nodes_per_graph = num_nodes_per_graph / self.size_max
 
             x = torch.cat((x, num_nodes_per_graph), dim=1)
 

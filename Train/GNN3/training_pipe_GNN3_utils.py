@@ -33,7 +33,7 @@ sys.path.append(parent_dir)
 sys.path.append(parent_parent_dir)
 
 from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_GNN3
-from Model.GNN3 import ModelWithEdgeFeatures, ModelWithgraph_embedding, ModelWithgraph_embedding_modif
+from Model.GNN3 import ModelWithEdgeFeatures, ModelWithgraph_embedding_modif
 from Model.metrics import  pseudo_accuracy_metric_gnn3
 
 
@@ -225,6 +225,8 @@ class TrainGNN3():
         self.every_epoch_save = config['every_epoch_save']
         self.every_epoch_metric = config['every_epoch_metric']
         self.val_metric_size = config['val_metric_size']
+        self.max_size = config['max_size']
+        self.size_info = config['use_size']
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Training on {self.device}")
 
@@ -262,12 +264,15 @@ class TrainGNN3():
                                                 mlp_hidden_channels=self.mlp_hidden,
                                                 edge_channels=edge_size, 
                                                 num_classes=edge_size,
-                                                use_dropout=self.use_dropout)
+                                                use_dropout=self.use_dropout,
+                                                size_info=self.size_info,
+                                                max_size=self.max_size)
         else:
             model = ModelWithEdgeFeatures(in_channels=encoding_size + int(self.feature_position), # We increase the input size to take into account the feature position
                                         hidden_channels_list=self.GCN_size,
                                         edge_channels=edge_size, 
-                                        use_dropout=self.use_dropout)
+                                        use_dropout=self.use_dropout,
+                                        max_size=self.max_size)
         
         return loader_train, loader_val, model.to(self.device), encoding_size, edge_size
     

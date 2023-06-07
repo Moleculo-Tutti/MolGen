@@ -185,8 +185,11 @@ class TrainGNN2():
         self.every_epoch_save = config['every_epoch_save']
         self.every_epoch_metric = config['every_epoch_metric']
         self.val_metric_size = config['val_metric_size']
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.node_embeddings = config['node_embeddings']
+        self.max_size = config['max_size']
+        self.use_size = config['use_size']
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         print(f"Training on {self.device}")
 
         print(f"Loading data...")
@@ -221,7 +224,9 @@ class TrainGNN2():
                                         mlp_hidden_channels= self.mlp_hidden,
                                         edge_channels= edge_size,
                                         encoding_size= encoding_size,
-                                        num_classes=  edge_size)
+                                        num_classes=  edge_size,
+                                        max_size= self.max_size)
+
         
         else :
         # Load the model
@@ -230,7 +235,9 @@ class TrainGNN2():
                                       mlp_hidden_channels=self.mlp_hidden, 
                                       edge_channels=edge_size, 
                                       use_dropout=self.use_dropout,
-                                      num_classes=edge_size)
+                                      num_classes=edge_size,
+                                      size_info=self.use_size,
+                                        max_size=self.max_size)
         
         return loader_train, loader_val, model.to(self.device), encoding_size, edge_size
     
