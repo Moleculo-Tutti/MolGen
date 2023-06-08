@@ -1,5 +1,5 @@
 {
-    "name": "GNN1_charged_kekulized_classic",
+    "name": "GNN1_charged_kekulized_no_feature_position",
     "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_charged_kekulized.pt",
     "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_charged_kekulized.pt",
     "GCN_size": [64, 128, 256, 512, 512],
@@ -7,7 +7,7 @@
     "mlp_hidden": 512,
     "batch_size": 128,
     "use_size": true,
-    "feature_position": true,
+    "feature_position": false,
     "use_dropout": false,
     "node_embeddings": false,
     "lr": 0.0001,
