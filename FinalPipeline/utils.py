@@ -22,25 +22,37 @@ from Model.GNN2 import ModelWithNodeConcat as GNN2_node_concat
 from Model.GNN3 import ModelWithEdgeFeatures as GNN3
 from Model.GNN3 import ModelWithgraph_embedding_modif as GNN3_embedding
 
-def tensor_to_smiles(node_features, edge_index, edge_attr, edge_mapping = 'aromatic'):
+def tensor_to_smiles(node_features, edge_index, edge_attr, edge_mapping = 'aromatic', encoding_type = 'charged'):
     # Create an empty editable molecule
     mol = Chem.RWMol()
 
     # Define atom mapping
-    atom_mapping = {
-        0: ('C', 0),
-        1: ('N', 0),
-        2: ('N', 1),
-        3: ('N', -1),
-        4: ('O', 0),
-        5: ('O', -1),
-        6: ('F', 0),
-        7: ('S', 0),
-        8: ('S', -1),
-        9: ('Cl', 0),
-        10: ('Br', 0),
-        11: ('I', 0)
-    }
+    if encoding_type == 'charged':
+        
+        atom_mapping = {
+            0: ('C', 0),
+            1: ('N', 0),
+            2: ('N', 1),
+            3: ('N', -1),
+            4: ('O', 0),
+            5: ('O', -1),
+            6: ('F', 0),
+            7: ('S', 0),
+            8: ('S', -1),
+            9: ('Cl', 0),
+            10: ('Br', 0),
+            11: ('I', 0)
+        }
+
+    elif encoding_type == 'polymer':
+        atom_mapping = {
+            0: ('C', 0),
+            1: ('N', 0),
+            2: ('O', 0),
+            3: ('F', 0),
+            4: ('Si', 0),
+            5: ('P', 0),
+            6: ('S', 0)}
 
     # Add atoms
     for atom_feature in node_features:
@@ -97,6 +109,14 @@ def sample_first_atom(encoding = 'reduced'):
                     '90': 0.013786373862576426, 
                     '160': 0.017856330814654413,
                     '170': 0.007441135845856433}
+    if encoding == 'polymer':
+        prob_dict = {'60': 0.7489344573582472,
+                    '70': 0.0561389266682314,
+                    '80': 0.0678638375933265,
+                    '160': 0.08724385192820308,
+                    '90': 0.032130486119902095,
+                    '140': 0.007666591133009364,
+                    '150': 2.184919908044154e-05}
 
     
     return random.choices(list(prob_dict.keys()), weights=list(prob_dict.values()))[0]
@@ -126,7 +146,8 @@ def get_model_GNN1(config, encoding_size, edge_size):
                 edge_channels=edge_size, 
                 num_classes=encoding_size, 
                 use_dropout=config['use_dropout'],
-                size_info=config['use_size'])
+                size_info=config['use_size'],
+                max_size=config['max_size'])
 
 def get_model_GNN2(config, encoding_size, edge_size):
 
@@ -135,6 +156,8 @@ def get_model_GNN2(config, encoding_size, edge_size):
                 mlp_hidden_channels=config['mlp_hidden'],
                 edge_channels=edge_size, 
                 num_classes=edge_size, 
+                size_info=config['use_size'],
+                max_size=config['max_size'],
                 use_dropout=config['use_dropout'])
 
 def get_model_GNN3(config, encoding_size, edge_size):
@@ -145,7 +168,9 @@ def get_model_GNN3(config, encoding_size, edge_size):
                     mlp_hidden_channels = config['mlp_hidden'],
                     edge_channels=edge_size, 
                     num_classes=edge_size,
-                    use_dropout=config['use_dropout'])
+                    use_dropout=config['use_dropout'],
+                    size_info=config['use_size'],
+                    max_size=config['max_size'])
 
     return GNN3(in_channels=encoding_size + int(config['feature_position']), 
                 hidden_channels_list=config["GCN_size"],
@@ -201,8 +226,8 @@ def select_node(tensor, edge_size):
     return tensor[max_index], max_index
 
 class MolGen():
-    def __init__(self, GNN1, GNN2, GNN3, encoding_size, edge_size, feature_position, device, save_intermidiate_states = False):
-        mol_graph = create_torch_graph_from_one_atom(sample_first_atom(), edge_size=edge_size, encoding_option='charged')
+    def __init__(self, GNN1, GNN2, GNN3, encoding_size, edge_size, feature_position, device, save_intermidiate_states = False, encoding_option = 'charged'):
+        mol_graph = create_torch_graph_from_one_atom(sample_first_atom(encoding_option), edge_size=edge_size, encoding_option=encoding_option)
         self.mol_graph = torch_geometric.data.Batch.from_data_list([mol_graph])
         self.queue = [0]
         self.GNN1 = GNN1
@@ -311,7 +336,7 @@ class MolGen():
             self.mol_graph = output_graph
 
     def full_generation(self):
-        max_iter = 100
+        max_iter = 300
         i = 0
         while len(self.queue) > 0:
             if i > max_iter:
@@ -327,7 +352,7 @@ class MolGen():
             edge_mapping = 'kekulized'
         else:
             edge_mapping = 'aromatic'
-        SMILES_str = tensor_to_smiles(self.mol_graph.x, self.mol_graph.edge_index, self.mol_graph.edge_attr, edge_mapping)
+        SMILES_str = tensor_to_smiles(self.mol_graph.x, self.mol_graph.edge_index, self.mol_graph.edge_attr, edge_mapping, encoding_type=self.encoding_type)
         mol = Chem.MolFromSmiles(SMILES_str)
         if mol is None:
             return False
@@ -336,12 +361,13 @@ class MolGen():
 
 
 class GenerationModule():
-    def __init__(self, config1, config2, config3, encoding_size, edge_size, pathGNN1, pathGNN2, pathGNN3, checking_mode = False):
+    def __init__(self, config1, config2, config3, encoding_size, edge_size, pathGNN1, pathGNN2, pathGNN3, checking_mode = False, encoding_type = 'charged'):
         self.config1 = config1
         self.config2 = config2
         self.config3 = config3
         self.encoding_size = encoding_size
         self.edge_size = edge_size
+        self.encoding_type = encoding_type
         self.feature_position = config1["feature_position"]
         self.checking_mode = checking_mode
 
@@ -372,7 +398,15 @@ class GenerationModule():
     def generate_mol_list(self, n_mol):
         mol_list = []
         for i in tqdm(range(n_mol)):
-            mol = MolGen(self.GNN1_model, self.GNN2_model, self.GNN3_model, self.encoding_size, self.edge_size, self.feature_position, self.device, save_intermidiate_states = self.checking_mode)
+            mol = MolGen(self.GNN1_model, 
+                         self.GNN2_model, 
+                         self.GNN3_model, 
+                         self.encoding_size, 
+                         self.edge_size, 
+                         self.feature_position, 
+                         self.device, 
+                         save_intermidiate_states = self.checking_mode, 
+                         encoding_option = self.encoding_type)
             mol.full_generation()
             if self.checking_mode:
                 # check validity of the molecule 

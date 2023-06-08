@@ -1,7 +1,7 @@
 {
-    "name": "GNN2_polymers_kekulized",
-    "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_polymers_kekulized.pt",
-    "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_polymers_kekulized.pt",
+    "name": "GNN2_charged_kekulized_classic",
+    "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_charged_kekulized.pt",
+    "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_charged_kekulized.pt",
     "GCN_size": [64, 128, 256, 512, 512],
     "n_epochs": 1000,
     "mlp_hidden": 512,
@@ -16,5 +16,5 @@
     "every_epoch_metric" : 30,
     "val_metric_size" : 10,
     "num_workers": 32,
-    "max_size": 150
+    "max_size": 40
 }
