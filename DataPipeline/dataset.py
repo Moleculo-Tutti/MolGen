@@ -54,12 +54,13 @@ def add_node_feature_based_on_position(data):
 
 class ZincSubgraphDatasetStep(Dataset):
 
-    def __init__(self, data_path, GNN_type : str, feature_position : bool = False):
+    def __init__(self, data_path, GNN_type : str, feature_position : bool = False, scores_list : list = []):
         self.data_list = torch.load(data_path)
         self.encoding_size = self.data_list[0].x.size(1)
         self.edge_size = self.data_list[0].edge_attr.size(1)
         self.GNN_type = GNN_type
         self.feature_position = feature_position
+        self.scores_list = scores_list
         if GNN_type >= 2:
             self.impose_edges = True
         else:
@@ -101,6 +102,14 @@ class ZincSubgraphDatasetStep(Dataset):
                 feature_position_tensor[0:id_map[terminal_nodes[0]]] = 1
                 subgraph.x = torch.cat([subgraph.x, feature_position_tensor], dim=1)
             
+            if self.scores_list != []:
+                # Concat the scores to the node features
+                for score_name in self.scores_list:
+                    score_tensor = torch.tensor(preprocessed_graph[score_name], dtype=torch.float32)
+                    # Duplicate the score tensor to match the number of nodes in the subgraph
+                    score_tensor = score_tensor.repeat(subgraph.x.size(0), 1)
+                    subgraph.x = torch.cat([subgraph.x, score_tensor], dim=-1)
+
             subgraph.y = label_gnn1
         
         if self.GNN_type == 2:
@@ -118,6 +127,15 @@ class ZincSubgraphDatasetStep(Dataset):
                 subgraph.neighbor = torch.cat([subgraph.neighbor, torch.zeros(1)], dim=0)
                 subgraph.x = torch.cat([subgraph.x, feature_position_tensor], dim=1)
 
+            if self.scores_list != []:
+                # Concat the scores to the node features
+                for score_name in self.scores_list:
+                    score_tensor = torch.tensor(preprocessed_graph[score_name], dtype=torch.float32)
+                    # Duplicate the score tensor to match the number of nodes in the subgraph
+                    score_tensor = score_tensor.repeat(subgraph.x.size(0), 1)
+                    subgraph.x = torch.cat([subgraph.x, score_tensor], dim=-1)
+                    subgraph.neighbor = torch.cat([subgraph.neighbor, torch.zeros(score_tensor.size(1))], dim=0)
+                    
 
         if self.GNN_type == 3:
 
@@ -161,6 +179,14 @@ class ZincSubgraphDatasetStep(Dataset):
                 # we add the opposite of the mask to the node features that correspond to the feature_position
                 subgraph.x = torch.cat((subgraph.x, opposite_mask.unsqueeze(1)), dim=1) 
 
+            if self.scores_list != []:
+                # Concat the scores to the node features
+                for score_name in self.scores_list:
+                    score_tensor = torch.tensor(preprocessed_graph[score_name], dtype=torch.float32)
+                    # Duplicate the score tensor to match the number of nodes in the subgraph
+                    score_tensor = score_tensor.repeat(subgraph.x.size(0), 1)
+                    subgraph.x = torch.cat([subgraph.x, score_tensor], dim=-1)
+            
 
             subgraph.cycle_label = node_features_label
             subgraph.mask = mask
