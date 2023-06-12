@@ -24,6 +24,7 @@ import numpy as np
 import sys
 import os
 import json
+import gc
 
 cwd = os.getcwd()
 parent_dir = os.path.dirname(cwd)
@@ -342,6 +343,7 @@ class TrainGNN1():
                 with open(six_best_epochs_file, 'w') as file:
                     for epoch, loss in self.six_best_eval_loss:
                         file.write(f'Epoch {epoch} with loss {loss}\n')
+            gc.collect()
 
 
     

@@ -22,7 +22,7 @@ from tqdm.notebook import tqdm as tqdm_notebook
 import numpy as np
 import time
 import json
-
+import gc
 
 import sys
 import os
@@ -195,7 +195,7 @@ def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False,
         conditional_precision_placed = global_well_placed_cycles / (global_cycles_created)
 
     return (
-        total_loss / len(loader.dataset),
+        total_loss / (len(loader.dataset) * val_metric_size),
         num_output / total_graphs_processed,
         num_labels / total_graphs_processed,
         global_cycles_created / (global_cycles_created + global_cycles_shouldnt_created),
@@ -378,4 +378,5 @@ class TrainGNN3():
                 with open(six_best_epochs_file, 'w') as file:
                     for epoch, loss in self.six_best_eval_loss:
                         file.write(f'Epoch {epoch} with loss {loss}\n')
+            gc.collect()
                     
