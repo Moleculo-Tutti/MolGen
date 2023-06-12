@@ -190,7 +190,6 @@ class TrainGNN1():
         self.score_list = config['score_list']
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.continue_training = continue_training
-        self.use_multithreading = config['use_multithreading']
         print(f"Training on {self.device}")
 
         print(f"Loading data...")

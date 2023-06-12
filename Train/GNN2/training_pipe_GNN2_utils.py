@@ -192,7 +192,6 @@ class TrainGNN2():
         self.use_size = config['use_size']
         self.score_list = config['score_list']
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.use_multithreading = config['use_multithreading']
         self.continue_training = continuue_training
 
         print(f"Training on {self.device}")

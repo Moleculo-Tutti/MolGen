@@ -229,7 +229,6 @@ class TrainGNN3():
         self.max_size = config['max_size']
         self.size_info = config['use_size']
         self.score_list = config['score_list']
-        self.use_multithreading = config['use_multithreading']
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Training on {self.device}")
         self.continue_training = continue_training

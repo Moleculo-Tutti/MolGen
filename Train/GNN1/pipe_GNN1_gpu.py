@@ -18,7 +18,7 @@ def main(args):
         mp.set_sharing_strategy('file_descriptor')#will work only if the number of batcj < 1024
     # Call the train_GNN1 function with the provided arguments
 
-    if config['use_multithreading']:
+    if config['use_multithreading_on_epochs']: #not on batches
         TrainingGNN1 = TrainGNN1_multithread(config)
         
     else :

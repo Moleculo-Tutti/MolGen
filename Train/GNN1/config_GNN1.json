@@ -15,7 +15,7 @@
     "every_epoch_save" : 50,
     "every_epoch_metric" : 30,
     "val_metric_size" : 10,
-    "use_multithreading" : false,
+    "use_multithreading_on_epochs" : false,
     "num_workers": 32,
     "max_size": 40,
     "score_list" : ["QED"]
