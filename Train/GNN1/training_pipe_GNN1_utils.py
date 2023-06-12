@@ -9,9 +9,7 @@ import torch.nn as nn
 
 from torch.optim import AdamW
 
-import torch_geometric.transforms as T
 
-from torch_geometric.data import Batch
 
 from torch.utils.data import DataLoader
 

@@ -290,7 +290,7 @@ class TrainGNN1_multithread():
                 columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector', 'avg_correct', 'precision', 'recall'])
     
     def train(self):
-        for epoch in range(tqdm(range(self.begin_epoch, self.n_epochs+1))):
+        for epoch in tqdm(range(self.begin_epoch, self.n_epochs+1)):
             torch.cuda.empty_cache()
             save_epoch = False 
             queue = mp.Queue()
