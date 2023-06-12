@@ -274,7 +274,19 @@ class TrainGNN1():
         
 
         with open(file_path, 'w') as file:
-            json.dump(self.config, file, indent=4)
+            json.dump(self.config, file)
+
+        training_csv_directory = os.path.join(self.directory_path_experience, 'training_history.csv')
+        eval_csv_directory = os.path.join(self.directory_path_experience, 'eval_history.csv')
+        if os.path.exists(training_csv_directory):
+            self.training_history = pd.read_csv(training_csv_directory)
+            self.eval_history = pd.read_csv(eval_csv_directory)
+        else:
+            self.training_history = pd.DataFrame(
+                columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector', 'avg_correct', 'precision', 'recall'])
+            self.eval_history = pd.DataFrame(
+                columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector', 'avg_correct', 'precision', 'recall'])
+    
     
     def train(self):
 
@@ -337,11 +349,17 @@ class TrainGNN1():
                 epoch_save_file = os.path.join(self.directory_path_epochs, f'checkpoint_{index_max}.pt')
                 torch.save(checkpoint, epoch_save_file)
 
-                training_csv_directory = os.path.join(self.directory_path_experience, 'training_history.csv')    
-                self.training_history.to_csv(training_csv_directory)
+                training_csv_directory = os.path.join(self.directory_path_experience, 'training_history.csv')
+                if os.path.exists(training_csv_directory):
+                    self.training_history.to_csv(training_csv_directory, mode='a', header=False)
+                else:
+                    self.training_history.to_csv(training_csv_directory)   
 
                 eval_csv_directory = os.path.join(self.directory_path_experience, 'eval_history.csv')    
-                self.eval_history.to_csv(eval_csv_directory)
+                if os.path.exists(eval_csv_directory):
+                    self.eval_history.to_csv(eval_csv_directory, mode='a', header=False)
+                else:
+                    self.eval_history.to_csv(eval_csv_directory)
 
                 # Create a txt file containing the infos about the six best epochs saved 
                 six_best_epochs_file = os.path.join(self.directory_path_experience, 'six_best_epochs.txt')
