@@ -12,7 +12,7 @@ def main(args):
     #go to the file of the experience you want to continue and load the best model
     path = Path('experiments/'+args.name_exp)
     #open the file six_best_epoch.txt and read the number of the best epoch
-    with open(path/'six_best_epoch.txt', 'r') as f:
+    with open(path/'six_best_epochs.txt', 'r') as f:
         lines = f.readlines()
         loss_values = [float(line.split('with loss ')[1]) for line in lines]
         best_line_index = loss_values.index(min(loss_values))
