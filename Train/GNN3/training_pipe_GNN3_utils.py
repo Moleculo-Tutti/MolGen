@@ -82,6 +82,8 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoc
         # Add softmax to out
         softmax_out = F.softmax(out, dim=1)
 
+        del loss
+
         if epoch_metric:
 
             cycles_created, well_placed_cycles , well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles = pseudo_accuracy_metric_gnn3(data,out,node_labels,mask, edge_size = size_edge)      
@@ -182,6 +184,7 @@ def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False,
 
                 total_loss += loss.item() * data.num_graphs
                 total_graphs_processed += data.num_graphs
+                del loss
 
     denominator = global_cycles_created + global_cycles_shouldnt_created + global_num_wanted_cycles
     if denominator == 0:
