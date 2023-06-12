@@ -26,6 +26,7 @@ import os
 import json
 import gc
 
+from torch.multiprocessing import Manager
 cwd = os.getcwd()
 parent_dir = os.path.dirname(cwd)
 parent_parent_dir = os.path.dirname(parent_dir)
@@ -219,15 +220,18 @@ class TrainGNN1():
 
     def load_data_model(self):
         # Load the data
-        if self.use_multithreading:
-            dataset_train = ZincSubgraphDatasetStep_mutlithread(self.datapath_train, GNN_type=1, feature_position=self.feature_position, scores_list=self.score_list)
-            dataset_val = ZincSubgraphDatasetStep_mutlithread(self.datapath_val, GNN_type=1, feature_position=self.feature_position, scores_list=self.score_list)
-        else :
-            dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=1, feature_position=self.feature_position, scores_list=self.score_list)
-            dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=1, feature_position=self.feature_position, scores_list=self.score_list)
         
-        loader_train = DataLoader(dataset_train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers, collate_fn=custom_collate_GNN1)
-        loader_val = DataLoader(dataset_val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers, collate_fn=custom_collate_GNN1)
+        dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=1, feature_position=self.feature_position, scores_list=self.score_list)
+        dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=1, feature_position=self.feature_position, scores_list=self.score_list)
+        
+        if self.use_multithreading
+            manager = Manager()
+            loader_train = DataLoader(dataset_train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers, collate_fn=custom_collate_GNN1, mananager=manager)
+            loader_val = DataLoader(dataset_val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers, collate_fn=custom_collate_GNN1, mananager=manager)
+        else :
+            loader_train = DataLoader(dataset_train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers, collate_fn=custom_collate_GNN1)
+            loader_val = DataLoader(dataset_val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers, collate_fn=custom_collate_GNN1)
+
 
         encoding_size = dataset_train.encoding_size
         edge_size = dataset_train.edge_size
