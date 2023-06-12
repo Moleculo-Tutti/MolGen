@@ -2,6 +2,8 @@ from training_pipe_GNN1_utils import TrainGNN1
 from training_pipe_GNN1_utils_multithread import TrainGNN1_multithread
 import argparse
 import json
+import torch.multiprocessing as mp
+
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)

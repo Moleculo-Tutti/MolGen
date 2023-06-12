@@ -24,7 +24,6 @@ import os
 import json
 import gc
 
-from torch.multiprocessing import Manager
 cwd = os.getcwd()
 parent_dir = os.path.dirname(cwd)
 parent_parent_dir = os.path.dirname(parent_dir)

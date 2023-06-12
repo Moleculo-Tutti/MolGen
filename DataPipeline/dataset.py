@@ -12,7 +12,6 @@ from io import BytesIO
 from tqdm import tqdm
 import os
 
-import torch.multiprocessing as mp
 
 
 from DataPipeline.preprocessing import get_subgraph_with_terminal_nodes_step
