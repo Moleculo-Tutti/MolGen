@@ -1,5 +1,5 @@
 {
-    "name": "GNN2_charged_kekulized_scores",
+    "name": "GNN2_charged_kekulized_scores_qed",
     "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_charged_kekulized_scores.pt",
     "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_charged_kekulized_scores.pt",
     "GCN_size": [64, 128, 256, 512, 512],
