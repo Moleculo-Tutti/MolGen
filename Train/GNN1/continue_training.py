@@ -28,6 +28,15 @@ def main(args):
     # Ouvrir le fichier JSON et charger la configuration
     with open(file_path_config, "r") as file:
         config = json.load(file)    
+
+       # Ouvrir le fichier JSON et charger la configuration
+    with open(file_path_config, "r") as file:
+        config = json.load(file)    
+    
+    if config['batch_size'] < 256:
+        mp.set_sharing_strategy('file_system') # will cause memory  leak 
+    else : 
+        mp.set_sharing_strategy('file_descriptor')#will work only if the number of batcj < 1024
     TrainingGNN1 = TrainGNN1(config, continue_training= True, checkpoint = checkpoint)
     TrainingGNN1.train()
 

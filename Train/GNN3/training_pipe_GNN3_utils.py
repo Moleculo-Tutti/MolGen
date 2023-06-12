@@ -1,7 +1,6 @@
 import torch
 import random
-import psutil
-
+import copy
 import pandas as pd
 
 from torch.utils.data import Dataset
@@ -59,10 +58,10 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoc
         progress_bar = tqdm(loader, desc="Training", unit="batch")
     
     for batch_idx, batch in enumerate(progress_bar):
-
-        data = batch[0].to(device)
-        node_labels = batch[1].to(device)
-        mask = batch[2].to(device)
+        batch_cp = copy.deepcopy(batch)
+        data = batch_cp[0].to(device)
+        node_labels = batch_cp[1].to(device)
+        mask = batch_cp[2].to(device)
         
         optimizer.zero_grad()
         out = model(data)
@@ -157,9 +156,10 @@ def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False,
 
         with torch.no_grad():
             for batch_idx, batch in enumerate(progress_bar):
-                data = batch[0].to(device)
-                node_labels = batch[1].to(device)
-                mask = batch[2].to(device)
+                batch_cp = copy.deepcopy(batch)
+                data = batch_cp[0].to(device)
+                node_labels = batch_cp[1].to(device)
+                mask = batch_cp[2].to(device)
 
                 out = model(data)
 
@@ -325,10 +325,6 @@ class TrainGNN3():
         for epoch in tqdm(range(self.begin_epoch, self.n_epochs+1)):
             torch.cuda.empty_cache()
             save_epoch = False
-            file_handles = psutil.Process().open_files()
-            num_open_files = len(file_handles)
-            print(f"Number of open files before training: {num_open_files}")
-
             if epoch % self.every_epoch_metric == 0:
                 loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score = train_one_epoch(
                     loader=self.loader_train,
@@ -341,9 +337,7 @@ class TrainGNN3():
                     print_bar = self.print_bar)
                 
                 self.training_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score]
-                file_handles = psutil.Process().open_files()
-                num_open_files = len(file_handles)
-                print( f"Number of open files after training: {num_open_files}")
+
                 loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score = eval_one_epoch(
                     loader=self.loader_val,
                     model=self.model,
@@ -376,9 +370,7 @@ class TrainGNN3():
                 
                 self.training_history.loc[epoch] = [epoch, loss, None, None, None, None, None, None, None, None]
                 self.eval_history.loc[epoch] = [epoch, None, None, None, None, None, None, None, None, None]
-            file_handles = psutil.Process().open_files()
-            num_open_files = len(file_handles)
-            print(f"Number of open files after training and val: {num_open_files}")
+
             if save_epoch:
                 checkpoint = {
                     'epoch': epoch,
