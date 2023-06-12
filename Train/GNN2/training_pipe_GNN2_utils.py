@@ -32,7 +32,7 @@ parent_parent_dir = os.path.dirname(parent_dir)
 sys.path.append(parent_dir)
 sys.path.append(parent_parent_dir)
 
-from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_passive_add_feature_GNN2, custom_collate_GNN2, ZincSubgraphDatasetStep_mutlithread
+from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_passive_add_feature_GNN2, custom_collate_GNN2
 from Model.GNN2 import ModelWithEdgeFeatures, ModelWithNodeConcat
 from Model.metrics import pseudo_accuracy_metric, pseudo_recall_for_each_class, pseudo_precision_for_each_class
 
@@ -219,12 +219,8 @@ class TrainGNN2():
 
     def load_data_model(self):
         # Load the data
-        if self.use_multithreading:
-            dataset_train = ZincSubgraphDatasetStep_mutlithread(self.datapath_train, GNN_type=2, feature_position=self.feature_position, scores_list=self.score_list)
-            dataset_val = ZincSubgraphDatasetStep_mutlithread(self.datapath_val, GNN_type=2, feature_position=self.feature_position, scores_list=self.score_list)
-        else:
-            dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=2, feature_position=self.feature_position, scores_list=self.score_list)
-            dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=2, feature_position=self.feature_position, scores_list=self.score_list)
+        dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=2, feature_position=self.feature_position, scores_list=self.score_list)
+        dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=2, feature_position=self.feature_position, scores_list=self.score_list)
         
         loader_train = DataLoader(dataset_train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers, collate_fn=custom_collate_GNN2)
         loader_val = DataLoader(dataset_val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers, collate_fn=custom_collate_GNN2)
