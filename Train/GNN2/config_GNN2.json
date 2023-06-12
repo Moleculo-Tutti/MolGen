@@ -18,5 +18,5 @@
     "use_multithreading" : false,
     "num_workers": 32,
     "max_size": 40,
-    "score_list" : ["logP"]
+    "score_list" : ["QED"]
 }
