@@ -202,7 +202,7 @@ class ZincSubgraphDatasetStep_mutlithread(Dataset):
 
     def __init__(self, data_path, GNN_type : str, feature_position : bool = False, scores_list : list = []):
         self.manager = Manager()
-        self.data_list = self.manager.list(torch.load(data_path))
+        self.data_list = self.manager.Array(torch.load(data_path))
         self.encoding_size = self.data_list[0].x.size(1)
         self.edge_size = self.data_list[0].edge_attr.size(1)
         self.GNN_type = GNN_type
