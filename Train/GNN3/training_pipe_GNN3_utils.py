@@ -1,5 +1,6 @@
 import torch
 import random
+import psutil
 
 import pandas as pd
 
@@ -324,6 +325,10 @@ class TrainGNN3():
         for epoch in tqdm(range(self.begin_epoch, self.n_epochs+1)):
             torch.cuda.empty_cache()
             save_epoch = False
+            file_handles = psutil.Process().open_files()
+            num_open_files = len(file_handles)
+            print(f"Number of open files before training: {num_open_files}")
+
             if epoch % self.every_epoch_metric == 0:
                 loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score = train_one_epoch(
                     loader=self.loader_train,
@@ -336,7 +341,9 @@ class TrainGNN3():
                     print_bar = self.print_bar)
                 
                 self.training_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score]
-
+                file_handles = psutil.Process().open_files()
+                num_open_files = len(file_handles)
+                print( f"Number of open files after training: {num_open_files}")
                 loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score = eval_one_epoch(
                     loader=self.loader_val,
                     model=self.model,
@@ -369,7 +376,9 @@ class TrainGNN3():
                 
                 self.training_history.loc[epoch] = [epoch, loss, None, None, None, None, None, None, None, None]
                 self.eval_history.loc[epoch] = [epoch, None, None, None, None, None, None, None, None, None]
-
+            file_handles = psutil.Process().open_files()
+            num_open_files = len(file_handles)
+            print(f"Number of open files after training and val: {num_open_files}")
             if save_epoch:
                 checkpoint = {
                     'epoch': epoch,
