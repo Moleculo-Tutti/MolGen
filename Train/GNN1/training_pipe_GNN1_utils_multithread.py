@@ -290,7 +290,7 @@ class TrainGNN1_multithread():
                 columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector', 'avg_correct', 'precision', 'recall'])
     
     def train(self):
-        mp.set_start_method('fork')
+        mp.set_start_method('spawn') 
         self.model.share_memory()
         for epoch in tqdm(range(self.begin_epoch, self.n_epochs+1)):
             torch.cuda.empty_cache()
@@ -301,7 +301,7 @@ class TrainGNN1_multithread():
             if epoch % self.every_epoch_metric == 0:
                 processes = []
                 for _ in range(self.num_workers):
-                    p = mp.Process(target=train_one_epoch, args=(self.loader_train, self.model, self.encoding_size,self.device,
+                    p = mp.get_context('spawn').Process(target=train_one_epoch, args=(self.loader_train, self.model, self.encoding_size,self.device,
                                                                 self.optimizer,self.criterion, True, queue,self.print_bar) )
                     p.start()
                     processes.append(p)
@@ -315,7 +315,7 @@ class TrainGNN1_multithread():
                 self.training_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, avg_correct, avg_correct_precision, avg_correct_recall]
                 processes2 = []
                 for _ in range(self.num_workers) : 
-                    p = mp.Process(target=eval_one_epoch, args=(self.loader_val, self.model, self.encoding_size, self.device,
+                    p = mp.get_context('spawn').Process(target=eval_one_epoch, args=(self.loader_val, self.model, self.encoding_size, self.device,
                                                                 self.criterion, queue,self.print_bar, self.val_metric_size))
                     p.start()
                     processes2.append(p)
@@ -337,7 +337,7 @@ class TrainGNN1_multithread():
             else :
                 processes3 = []
                 for _ in range(self.num_workers):
-                    p = mp.Process(target=train_one_epoch, args=(self.loader_train, self.model, self.encoding_size,self.device,
+                    p = mp.get_context('spawn').Process(target=train_one_epoch, args=(self.loader_train, self.model, self.encoding_size,self.device,
                                                                 self.optimizer,self.criterion, False, queue,self.print_bar) )
                     p.start()
                     processes3.append(p)
