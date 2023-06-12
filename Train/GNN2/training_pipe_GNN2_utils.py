@@ -23,6 +23,7 @@ import numpy as np
 
 import sys
 import os
+import json
 
 cwd = os.getcwd()
 parent_dir = os.path.dirname(cwd)
@@ -168,7 +169,7 @@ def eval_one_epoch(loader, model, edge_size, device, criterion, print_bar = Fals
 
 
 class TrainGNN2():
-    def __init__(self, config):
+    def __init__(self, config, continuue_training = False, checkpoint = None):
         self.config = config
         self.name = config['name']
         self.datapath_train = config['datapath_train']
@@ -190,6 +191,7 @@ class TrainGNN2():
         self.use_size = config['use_size']
         self.score_list = config['score_list']
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.continue_training = continuue_training
 
         print(f"Training on {self.device}")
 
@@ -198,6 +200,11 @@ class TrainGNN2():
         print(f"Data loaded")
 
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+        self.begin_epoch = 0
+        if self.continue_training:
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            self.begin_epoch = checkpoint['epoch']
         self.criterion = nn.CrossEntropyLoss()
 
         self.training_history = pd.DataFrame(columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector', 'avg_correct', 'precision', 'recall'])
@@ -257,20 +264,15 @@ class TrainGNN2():
         if not os.path.exists(self.directory_path_epochs) :
             os.makedirs(self.directory_path_epochs)
         
-        file_path = os.path.join(self.directory_path_experience, "parameters.txt")
+        file_path = os.path.join(self.directory_path_experience, "parameters.json")
         
+        with open(file_path, 'w') as file :
+            json.dump(self.config, file)
 
-        with open(file_path, "w") as file:
-            for param, value in self.config.items():
-                # Convert lists to strings if necessary
-                if isinstance(value, list):
-                    value = ', '.join(str(item) for item in value)
-                line = f"{param}: {value}\n"
-                file.write(line)
-    
+
     def train(self):
 
-        for epoch in tqdm(range(0, self.n_epochs+1)):
+        for epoch in tqdm(range(self.begin_epoch, self.n_epochs+1)):
             torch.cuda.empty_cache()
             save_epoch = False
             if epoch % self.every_epoch_metric == 0:

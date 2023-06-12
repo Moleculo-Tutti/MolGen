@@ -1,4 +1,4 @@
-from training_pipe_GNN3_utils import TrainGNN3
+from training_pipe_GNN1_utils import TrainGNN1
 from pathlib import Path
 import argparse
 import torch
@@ -27,8 +27,8 @@ def main(args):
     # Ouvrir le fichier JSON et charger la configuration
     with open(file_path_config, "r") as file:
         config = json.load(file)    
-    TrainingGNN3 = TrainGNN3(config, continue_training= True, checkpoint = checkpoint)
-    TrainingGNN3.train()
+    TrainingGNN1 = TrainGNN1(config, continue_training= True, checkpoint = checkpoint)
+    TrainingGNN1.train()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
