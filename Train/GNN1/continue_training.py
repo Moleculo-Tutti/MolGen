@@ -4,6 +4,7 @@ import argparse
 import torch
 import json
 from visualize import plot_history_GNN3
+import torch.multiprocessing as mp
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)

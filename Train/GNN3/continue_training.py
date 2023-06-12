@@ -4,6 +4,8 @@ import argparse
 import torch
 import json
 from visualize import plot_history_GNN3
+import torch.multiprocessing as mp
+
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -27,6 +29,11 @@ def main(args):
     # Ouvrir le fichier JSON et charger la configuration
     with open(file_path_config, "r") as file:
         config = json.load(file)    
+    
+    if config['batch_size'] < 256:
+        mp.set_sharing_strategy('file_system') # will cause memory  leak 
+    else : 
+        mp.set_sharing_strategy('file_descriptor')#will work only if the number of batcj < 1024
     TrainingGNN3 = TrainGNN3(config, continue_training= True, checkpoint = checkpoint)
     TrainingGNN3.train()
 
