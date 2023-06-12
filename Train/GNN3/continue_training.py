@@ -22,7 +22,7 @@ def main(args):
     checkpoint = torch.load(path/'history_training/checkpoint_{}.pt'.format(best_line_index))
 
     # Call the train_GNN3 function with the provided arguments
-    file_path_config = path+ "/parameters.json"
+    file_path_config = path/'parameters.json'
 
     # Ouvrir le fichier JSON et charger la configuration
     with open(file_path_config, "r") as file:
