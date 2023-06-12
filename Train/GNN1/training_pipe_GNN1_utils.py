@@ -69,6 +69,7 @@ def train_one_epoch(loader, model, encoding_size, device, optimizer, criterion, 
 
         loss.backward()
         optimizer.step()
+        del loss
 
         total_loss += loss.item() * data.num_graphs
 
@@ -106,7 +107,6 @@ def train_one_epoch(loader, model, encoding_size, device, optimizer, criterion, 
                                     avg_f1=avg_f1,
                                     count_per_class_precision=count_per_class_precision,
                                     count_per_class_recall=count_per_class_recall)
-
 
     if epoch_metric:
         return total_loss / len(loader.dataset), current_avg_label_vector, current_avg_output_vector, avg_correct , avg_correct_precision, avg_correct_recall
@@ -272,16 +272,6 @@ class TrainGNN1():
         with open(file_path, 'w') as file:
             json.dump(self.config, file)
 
-        training_csv_directory = os.path.join(self.directory_path_experience, 'training_history.csv')
-        eval_csv_directory = os.path.join(self.directory_path_experience, 'eval_history.csv')
-        if os.path.exists(training_csv_directory):
-            self.training_history = pd.read_csv(training_csv_directory)
-            self.eval_history = pd.read_csv(eval_csv_directory)
-        else:
-            self.training_history = pd.DataFrame(
-                columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector', 'avg_correct', 'precision', 'recall'])
-            self.eval_history = pd.DataFrame(
-                columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector', 'avg_correct', 'precision', 'recall'])
     
     
     def train(self):

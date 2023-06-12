@@ -1,6 +1,5 @@
 import torch
 import random
-import copy
 import pandas as pd
 
 from torch.utils.data import Dataset
@@ -58,10 +57,9 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoc
         progress_bar = tqdm(loader, desc="Training", unit="batch")
     
     for _, batch in enumerate(progress_bar):
-        batch_cp = copy.deepcopy(batch)
-        data = batch_cp[0].to(device)
-        node_labels = batch_cp[1].to(device)
-        mask = batch_cp[2].to(device)
+        data = batch[0].to(device)
+        node_labels = batch[1].to(device)
+        mask = batch[2].to(device)
         
         optimizer.zero_grad()
         out = model(data)
@@ -111,12 +109,15 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoc
                 conditional_precision_placed = 1
             else:
                 conditional_precision_placed = global_well_placed_cycles/(global_cycles_created)
+
+            del softmax_out, cycles_created, well_placed_cycles, well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles
+
             if print_bar:
                 progress_bar.set_postfix(loss=loss_value, avg_num_output=num_output / total_graphs_processed, avg_num_labels=num_labels / total_graphs_processed,
                 pseudo_precision = global_cycles_created/(global_cycles_created+global_cycles_shouldnt_created),  pseudo_recall = global_cycles_created/global_num_wanted_cycles ,
                 pseudo_recall_placed = global_well_placed_cycles/global_num_wanted_cycles, pseudo_recall_type = global_well_type_cycles/global_num_wanted_cycles, 
                 conditional_precision_placed = conditional_precision_placed, f1_score = f1_score)
-            
+    gc.collect()        
     if epoch_metric:
         return (
             total_loss / len(loader.dataset),
@@ -129,6 +130,7 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoc
             conditional_precision_placed,
             f1_score)
     
+
     else:
         return total_loss / len(loader.dataset), None, None, None, None, None, None, None, None
 
@@ -156,10 +158,9 @@ def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False,
 
         with torch.no_grad():
             for _, batch in enumerate(progress_bar):
-                batch_cp = copy.deepcopy(batch)
-                data = batch_cp[0].to(device)
-                node_labels = batch_cp[1].to(device)
-                mask = batch_cp[2].to(device)
+                data = batch[0].to(device)
+                node_labels = batch[1].to(device)
+                mask = batch[2].to(device)
 
                 out = model(data)
 
@@ -197,7 +198,7 @@ def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False,
         conditional_precision_placed = 1
     else:
         conditional_precision_placed = global_well_placed_cycles / (global_cycles_created)
-
+    del softmax_out, cycles_created, well_placed_cycles, well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles
     return (
         total_loss / (len(loader.dataset) * val_metric_size),
         num_output / total_graphs_processed,
@@ -309,16 +310,6 @@ class TrainGNN3():
 
         with open(file_path, "w") as file:
             json.dump(self.config, file)
-
-        training_csv_directory = os.path.join(self.directory_path_experience, 'training_history.csv')
-        eval_csv_directory = os.path.join(self.directory_path_experience, 'eval_history.csv')
-
-        self.training_history = pd.DataFrame(
-            columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector', 'pseudo_precision', 'pseudo_recall',
-                     'pseudo_recall_placed', 'pseudo_recall_type', 'conditionnal_precision_placed', 'f1_score'])
-        self.eval_history = pd.DataFrame(
-                columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector','pseudo_precision', 'pseudo_recall' ,
-                          'pseudo_recall_placed', 'pseudo_recall_type','conditionnal_precision_placed', 'f1_score'])
     
     def train(self):
 
