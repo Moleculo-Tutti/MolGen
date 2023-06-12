@@ -33,7 +33,7 @@ parent_parent_dir = os.path.dirname(parent_dir)
 sys.path.append(parent_dir)
 sys.path.append(parent_parent_dir)
 
-from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_passive_add_feature, custom_collate_GNN1, ZincSubgraphDatasetStep_mutlithread
+from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_GNN1
 from Model.GNN1 import ModelWithEdgeFeatures, ModelWithNodeConcat
 from Model.metrics import pseudo_accuracy_metric, pseudo_recall_for_each_class, pseudo_precision_for_each_class
 

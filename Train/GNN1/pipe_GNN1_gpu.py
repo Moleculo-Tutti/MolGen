@@ -13,9 +13,11 @@ def main(args):
 
     # Call the train_GNN1 function with the provided arguments
     if config['use_multithreading']:
-        TrainingGNN1 = TrainGNN1(config)
-    else :
         TrainingGNN1 = TrainGNN1_multithread(config)
+        
+    else :
+        TrainingGNN1 = TrainGNN1(config)
+        
     TrainingGNN1.train()
 
 if __name__ == '__main__':
