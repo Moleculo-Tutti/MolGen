@@ -224,7 +224,7 @@ class TrainGNN1():
         dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=1, feature_position=self.feature_position, scores_list=self.score_list)
         dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=1, feature_position=self.feature_position, scores_list=self.score_list)
         
-        if self.use_multithreading
+        if self.use_multithreading :
             manager = Manager()
             loader_train = DataLoader(dataset_train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers, collate_fn=custom_collate_GNN1, mananager=manager)
             loader_val = DataLoader(dataset_val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers, collate_fn=custom_collate_GNN1, mananager=manager)
