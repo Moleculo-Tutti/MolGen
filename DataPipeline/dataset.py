@@ -13,7 +13,7 @@ from tqdm import tqdm
 import os
 
 import torch.multiprocessing as mp
-mp.set_sharing_strategy('file_system') # if commented it will use by default file_descriptor
+#mp.set_sharing_strategy('file_system') # if commented it will use by default file_descriptor
 
 from DataPipeline.preprocessing import get_subgraph_with_terminal_nodes_step
 
