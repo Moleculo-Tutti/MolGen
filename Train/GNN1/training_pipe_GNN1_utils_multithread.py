@@ -289,8 +289,8 @@ class TrainGNN1_multithread():
             self.eval_history = pd.DataFrame(
                 columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector', 'avg_correct', 'precision', 'recall'])
     
-    def train(self,epoch):
-        for i in range(tqdm(range(self.begin_epoch, self.n_epochs+1))):
+    def train(self):
+        for epoch in range(tqdm(range(self.begin_epoch, self.n_epochs+1))):
             torch.cuda.empty_cache()
             save_epoch = False 
             queue = mp.Queue()
