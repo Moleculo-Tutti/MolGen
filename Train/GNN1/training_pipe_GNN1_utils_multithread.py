@@ -294,6 +294,7 @@ class TrainGNN1_multithread():
             torch.cuda.empty_cache()
             save_epoch = False 
             queue = mp.Queue()
+            self.model.share_memory()
             if epoch % self.every_epoch_metric == 0:
                 processes = []
                 for _ in range(self.num_workers):
@@ -305,6 +306,7 @@ class TrainGNN1_multithread():
                     p.join()
                 results= []
                 while not queue.empty():
+                    print('liste_non_vide')
                     results.append(queue.get())
                 loss, avg_label_vector, avg_output_vector, avg_correct, avg_correct_precision, avg_correct_recall = zip(*results)
                 self.training_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, avg_correct, avg_correct_precision, avg_correct_recall]
