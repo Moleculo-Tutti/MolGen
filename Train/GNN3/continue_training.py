@@ -17,6 +17,8 @@ def main(args):
         loss_values = [float(line.split('with loss ')[1]) for line in lines]
         best_line_index = loss_values.index(min(loss_values))
     #load the best model and its adam optimizer
+    print('loading besy checkpoint number {}'.format(best_line_index))
+    print('it had best loss of {}'.format(loss_values[best_line_index]))
     checkpoint = torch.load(path+'/history_training/checkpoint_{}.pt'.format(best_line_index))
 
     # Call the train_GNN3 function with the provided arguments
