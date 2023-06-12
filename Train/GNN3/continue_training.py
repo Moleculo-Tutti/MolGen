@@ -19,7 +19,7 @@ def main(args):
     #load the best model and its adam optimizer
     print('loading besy checkpoint number {}'.format(best_line_index))
     print('it had best loss of {}'.format(loss_values[best_line_index]))
-    checkpoint = torch.load(path+'/history_training/checkpoint_{}.pt'.format(best_line_index))
+    checkpoint = torch.load(path/'history_training/checkpoint_{}.pt'.format(best_line_index))
 
     # Call the train_GNN3 function with the provided arguments
     file_path_config = path+ "/parameters.json"
