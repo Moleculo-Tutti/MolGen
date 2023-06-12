@@ -10,7 +10,10 @@ def main(args):
     # Load config file
     with open(args.config, 'r') as f:
         config = json.load(f)
-
+    if config['batch_size'] < 256:
+        mp.set_sharing_strategy('file_system') # will cause memory  leak 
+    else : 
+        mp.set_sharing_strategy('file_descriptor')
     # Call the train_GNN1 function with the provided arguments
     if config['use_multithreading']:
         TrainingGNN1 = TrainGNN1_multithread(config)
