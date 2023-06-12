@@ -309,8 +309,11 @@ class TrainGNN3():
         training_csv_directory = os.path.join(self.directory_path_experience, 'training_history.csv')
         eval_csv_directory = os.path.join(self.directory_path_experience, 'eval_history.csv')
         if os.path.exists(training_csv_directory):
+            print("file already exists")
             self.training_history = pd.read_csv(training_csv_directory)
+            self.training_history.rename(columns={0: "epoch"}, inplace=True)
             self.eval_history = pd.read_csv(eval_csv_directory)
+            self.eval_history.rename(columns={0: "epoch"}, inplace=True)
         else:
             self.training_history = pd.DataFrame(
                 columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector', 'pseudo_precision', 'pseudo_recall',
