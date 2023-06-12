@@ -294,7 +294,9 @@ class TrainGNN1_multithread():
             torch.cuda.empty_cache()
             save_epoch = False 
             queue = mp.Queue()
+            mp.set_start_method('fork')
             self.model.share_memory()
+
             if epoch % self.every_epoch_metric == 0:
                 processes = []
                 for _ in range(self.num_workers):
