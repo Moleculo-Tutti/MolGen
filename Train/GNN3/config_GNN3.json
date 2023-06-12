@@ -14,8 +14,10 @@
     "every_epoch_save" : 50,
     "every_epoch_metric" : 50,
     "val_metric_size" : 10,
+    "use_multithreading" : true,
     "num_workers": 32,
     "use_size": true,
     "max_size": 40,
     "score_list" : ["logP"]
+    
 }

@@ -32,7 +32,7 @@ parent_parent_dir = os.path.dirname(parent_dir)
 sys.path.append(parent_dir)
 sys.path.append(parent_parent_dir)
 
-from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_passive_add_feature, custom_collate_GNN1
+from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_passive_add_feature, custom_collate_GNN1, ZincSubgraphDatasetStep_mutlithread
 from Model.GNN1 import ModelWithEdgeFeatures, ModelWithNodeConcat
 from Model.metrics import pseudo_accuracy_metric, pseudo_recall_for_each_class, pseudo_precision_for_each_class
 
@@ -192,6 +192,7 @@ class TrainGNN1():
         self.score_list = config['score_list']
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.continue_training = continue_training
+        self.use_multithreading = config['use_multithreading']
         print(f"Training on {self.device}")
 
         print(f"Loading data...")
@@ -218,8 +219,12 @@ class TrainGNN1():
 
     def load_data_model(self):
         # Load the data
-        dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=1, feature_position=self.feature_position, scores_list=self.score_list)
-        dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=1, feature_position=self.feature_position, scores_list=self.score_list)
+        if self.use_multithreading:
+            dataset_train = ZincSubgraphDatasetStep_mutlithread(self.datapath_train, GNN_type=1, feature_position=self.feature_position, scores_list=self.score_list)
+            dataset_val = ZincSubgraphDatasetStep_mutlithread(self.datapath_val, GNN_type=1, feature_position=self.feature_position, scores_list=self.score_list)
+        else :
+            dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=1, feature_position=self.feature_position, scores_list=self.score_list)
+            dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=1, feature_position=self.feature_position, scores_list=self.score_list)
         
         loader_train = DataLoader(dataset_train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers, collate_fn=custom_collate_GNN1)
         loader_val = DataLoader(dataset_val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers, collate_fn=custom_collate_GNN1)
