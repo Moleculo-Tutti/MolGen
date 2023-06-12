@@ -57,7 +57,7 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoc
     else:
         progress_bar = tqdm(loader, desc="Training", unit="batch")
     
-    for batch_idx, batch in enumerate(progress_bar):
+    for _, batch in enumerate(progress_bar):
         batch_cp = copy.deepcopy(batch)
         data = batch_cp[0].to(device)
         node_labels = batch_cp[1].to(device)
@@ -155,7 +155,7 @@ def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False,
     for i in tqdm(range(val_metric_size)):
 
         with torch.no_grad():
-            for batch_idx, batch in enumerate(progress_bar):
+            for _, batch in enumerate(progress_bar):
                 batch_cp = copy.deepcopy(batch)
                 data = batch_cp[0].to(device)
                 node_labels = batch_cp[1].to(device)

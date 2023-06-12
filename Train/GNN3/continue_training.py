@@ -31,8 +31,10 @@ def main(args):
         config = json.load(file)    
     
     if config['batch_size'] < 256:
+        print("you will have memory leak")
         mp.set_sharing_strategy('file_system') # will cause memory  leak 
     else : 
+        print("you won't have memory leak but you can have too number of open files")
         mp.set_sharing_strategy('file_descriptor')#will work only if the number of batcj < 1024
     TrainingGNN3 = TrainGNN3(config, continue_training= True, checkpoint = checkpoint)
     TrainingGNN3.train()
