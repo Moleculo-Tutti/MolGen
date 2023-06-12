@@ -228,6 +228,7 @@ class TrainGNN3():
         self.val_metric_size = config['val_metric_size']
         self.max_size = config['max_size']
         self.size_info = config['use_size']
+        self.score_list = config['score_list']
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Training on {self.device}")
         self.continue_training = continue_training
@@ -255,8 +256,8 @@ class TrainGNN3():
 
     def load_data_model(self):
         # Load the data
-        dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=3, feature_position=self.feature_position)
-        dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=3, feature_position=self.feature_position)
+        dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=3, feature_position=self.feature_position, scores_list=self.score_list)
+        dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=3, feature_position=self.feature_position, scores_list=self.score_list)
         
         loader_train = DataLoader(dataset_train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers, collate_fn=custom_collate_GNN3)
         loader_val = DataLoader(dataset_val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers, collate_fn=custom_collate_GNN3)
@@ -267,7 +268,7 @@ class TrainGNN3():
         
         # Load the model
         if self.graph_embedding:
-            model = ModelWithgraph_embedding_modif(in_channels = encoding_size + int(self.feature_position), # We increase the input size to take into account the feature position
+            model = ModelWithgraph_embedding_modif(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
                                                 hidden_channels_list=self.GCN_size,
                                                 mlp_hidden_channels=self.mlp_hidden,
                                                 edge_channels=edge_size, 
@@ -276,7 +277,7 @@ class TrainGNN3():
                                                 size_info=self.size_info,
                                                 max_size=self.max_size)
         else:
-            model = ModelWithEdgeFeatures(in_channels=encoding_size + int(self.feature_position), # We increase the input size to take into account the feature position
+            model = ModelWithEdgeFeatures(in_channels=encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
                                         hidden_channels_list=self.GCN_size,
                                         edge_channels=edge_size, 
                                         use_dropout=self.use_dropout,

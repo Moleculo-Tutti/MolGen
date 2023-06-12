@@ -349,7 +349,7 @@ def edge_encoder(bond_type : float, kekulize=False) -> torch.Tensor:
 
     return one_hot
 
-def process_encode_graph(smiles, encoding_option='all', kekulize=False) -> torch_geometric.data.Data:
+def process_encode_graph(smiles, encoding_option='all', kekulize=False, optional_scores = None) -> torch_geometric.data.Data:
     """
     Take a SMILES string and encode it into a torch_geometric.data.Data object.
     One hot encode the node and edge features.
@@ -378,6 +378,11 @@ def process_encode_graph(smiles, encoding_option='all', kekulize=False) -> torch
 
     # Create new data object with the encoded node and edge features
     encoded_data = Data(x=node_features, edge_attr=edge_attr, edge_index=data.edge_index)
+
+    # Add the optional scores
+    if optional_scores is not None:
+        for key, value in optional_scores.items():
+            encoded_data.__setattr__(key, value)
 
     return encoded_data
 

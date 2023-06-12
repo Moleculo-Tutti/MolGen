@@ -188,6 +188,7 @@ class TrainGNN2():
         self.node_embeddings = config['node_embeddings']
         self.max_size = config['max_size']
         self.use_size = config['use_size']
+        self.score_list = config['score_list']
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         print(f"Training on {self.device}")
@@ -209,8 +210,8 @@ class TrainGNN2():
 
     def load_data_model(self):
         # Load the data
-        dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=2, feature_position=self.feature_position)
-        dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=2, feature_position=self.feature_position)
+        dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=2, feature_position=self.feature_position, scores_list=self.score_list)
+        dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=2, feature_position=self.feature_position, scores_list=self.score_list)
         
         loader_train = DataLoader(dataset_train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers, collate_fn=custom_collate_GNN2)
         loader_val = DataLoader(dataset_val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers, collate_fn=custom_collate_GNN2)
@@ -219,7 +220,7 @@ class TrainGNN2():
         edge_size = dataset_train.edge_size
 
         if self.node_embeddings :
-            model = ModelWithNodeConcat(in_channels= encoding_size+ int(self.feature_position), 
+            model = ModelWithNodeConcat(in_channels= encoding_size+ int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position and the node embeddings (if we use them)
                                         hidden_channels_list= self.GCN_size,
                                         mlp_hidden_channels= self.mlp_hidden,
                                         edge_channels= edge_size,
@@ -230,7 +231,7 @@ class TrainGNN2():
         
         else :
         # Load the model
-            model = ModelWithEdgeFeatures(in_channels=encoding_size + int(self.feature_position), # We increase the input size to take into account the feature position
+            model = ModelWithEdgeFeatures(in_channels=encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
                                       hidden_channels_list=self.GCN_size, 
                                       mlp_hidden_channels=self.mlp_hidden, 
                                       edge_channels=edge_size, 
