@@ -71,6 +71,8 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoc
         optimizer.step()
 
         total_loss += loss.item() * data.num_graphs
+        del loss
+        del logit_out
 
         if epoch_metric:
             # Metrics part
