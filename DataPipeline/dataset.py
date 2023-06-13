@@ -11,7 +11,7 @@ from io import BytesIO
 
 from tqdm import tqdm
 import os
-
+import gc
 
 
 from DataPipeline.preprocessing import get_subgraph_with_terminal_nodes_step
@@ -190,6 +190,11 @@ class ZincSubgraphDatasetStep(Dataset):
             subgraph.cycle_label = node_features_label
             subgraph.mask = mask
             subgraph.terminal_node_info = terminal_nodes
+
+            # Clean the memory 
+            del node_features_label, mask, neighbor, edge_neighbor_attr, add_edge_index, node1, node2, id_chosen, opposite_mask, cycle_neighbor, terminal_nodes, score_name, score_tensor
+            # Garbage collector
+            gc.collect()
 
 
         return subgraph

@@ -14,7 +14,7 @@ from rdkit import Chem
 from rdkit.Chem import rdchem
 import torch
 from torch_geometric.data import Data
-
+import gc
 
 
 def smiles_to_torch_geometric(smiles, charge=False, kekulize=False):
@@ -261,6 +261,10 @@ def get_subgraph_with_terminal_nodes_step(data, num_steps, impose_edges=False):
             terminal_node_infos = (current, external_neighbors)
             subgraph_indices = torch.tensor(list(subgraph_atoms), dtype=torch.long)
             subgraph_data = get_subgraph(data, subgraph_indices, id_map)
+
+            # Garbage collection
+            del queue, subgraph_atoms, visited
+            gc.collect()
             return subgraph_data, terminal_node_infos, id_map
 
         for neighbor in neighbors:
@@ -276,6 +280,10 @@ def get_subgraph_with_terminal_nodes_step(data, num_steps, impose_edges=False):
             terminal_node_infos = (current, [])
             subgraph_indices = torch.tensor(list(subgraph_atoms), dtype=torch.long)
             subgraph_data = get_subgraph(data, subgraph_indices, id_map)
+
+            # Garbage collection
+            del queue, subgraph_atoms, visited
+            gc.collect()
             return subgraph_data, terminal_node_infos, id_map  
         
 
