@@ -1,15 +1,20 @@
 import torch
 import torch_geometric
-
-
-from utils import GenerationModule, MolGen, tensor_to_smiles
+import sys
 from tqdm import tqdm
-from rdkit import Chem
 import pandas as pd
 from path import Path
 import argparse
 import json
 import os
+
+cwd = os.getcwd()
+parent_dir = os.path.dirname(cwd)
+parent_parent_dir = os.path.dirname(parent_dir)
+sys.path.append(parent_dir)
+sys.path.append(parent_parent_dir)
+from utils import GenerationModule, MolGen, tensor_to_smiles
+
 
 
 def parse_list_of_floats(input_string):
