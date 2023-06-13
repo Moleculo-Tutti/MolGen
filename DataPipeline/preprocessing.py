@@ -264,7 +264,6 @@ def get_subgraph_with_terminal_nodes_step(data, num_steps, impose_edges=False):
 
             # Garbage collection
             del queue, subgraph_atoms, visited
-            gc.collect()
             return subgraph_data, terminal_node_infos, id_map
 
         for neighbor in neighbors:
@@ -283,7 +282,6 @@ def get_subgraph_with_terminal_nodes_step(data, num_steps, impose_edges=False):
 
             # Garbage collection
             del queue, subgraph_atoms, visited
-            gc.collect()
             return subgraph_data, terminal_node_infos, id_map  
         
 
