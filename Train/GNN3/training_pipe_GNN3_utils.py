@@ -389,5 +389,7 @@ class TrainGNN3():
                 with open(six_best_epochs_file, 'w') as file:
                     for epoch, loss in self.six_best_eval_loss:
                         file.write(f'Epoch {epoch} with loss {loss}\n')
+                del checkpoint, epoch_save_file, six_best_epochs_file, training_csv_directory, eval_csv_directory, file
+            del loss
             gc.collect()
                     
