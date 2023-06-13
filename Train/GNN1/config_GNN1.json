@@ -1,11 +1,11 @@
 {
-    "name": "GNN1_charged_kekulized_scores_new_test",
+    "name": "GNN1_charged_kekulized_scores_SA",
     "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_charged_kekulized_scores.pt",
     "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_charged_kekulized_scores.pt",
     "GCN_size": [64, 128, 256, 512, 512],
     "n_epochs": 2000,
     "mlp_hidden": 512,
-    "batch_size": 256,
+    "batch_size": 128,
     "use_size": true,
     "feature_position": true,
     "use_dropout": false,
@@ -18,5 +18,5 @@
     "use_multithreading_on_epochs" : false,
     "num_workers": 32,
     "max_size": 40,
-    "score_list" : ["QED"]
+    "score_list" : ["SA"]
 }

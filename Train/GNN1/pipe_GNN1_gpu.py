@@ -13,9 +13,11 @@ def main(args):
     with open(args.config, 'r') as f:
         config = json.load(f)
     if config['batch_size'] < 256:
-        mp.set_sharing_strategy('file_system') # will cause memory  leak 
+        mp.set_sharing_strategy('file_system') # will cause memory  leak
+        print("maybe you will have memory leak")
     else : 
         mp.set_sharing_strategy('file_descriptor')#will work only if the number of batcj < 1024
+        print("it can crash if too many file are open in the process")
     # Call the train_GNN1 function with the provided arguments
 
     if config['use_multithreading_on_epochs']: #not on batches
