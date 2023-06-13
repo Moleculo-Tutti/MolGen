@@ -32,7 +32,7 @@ def main(args):
     if config['batch_size'] < 256:
         mp.set_sharing_strategy('file_system') # will cause memory  leak 
     else : 
-        mp.set_sharing_strategy('file_descriptor')#will work only if the number of batcj < 1024 
+        mp.set_sharing_strategy('file_descriptor')#will work only if the number of batch < 1024 
     TrainingGNN2 = TrainGNN2(config, continue_training= True, checkpoint = checkpoint)
     TrainingGNN2.train()
 

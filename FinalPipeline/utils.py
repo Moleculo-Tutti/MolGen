@@ -9,6 +9,9 @@ import os
 from rdkit import Chem
 from tqdm import tqdm
 
+from concurrent.futures import ThreadPoolExecutor
+import concurrent
+
 cwd = os.getcwd()
 parent_dir = os.path.dirname(cwd)
 sys.path.append(parent_dir)
@@ -395,23 +398,35 @@ class GenerationModule():
         self.GNN2_model.eval()
         self.GNN3_model.eval()
     
-    def generate_mol_list(self, n_mol):
+    def generate_single_molecule(self):
+        mol = MolGen(self.GNN1_model,
+                     self.GNN2_model,
+                     self.GNN3_model,
+                     self.encoding_size,
+                     self.edge_size,
+                     self.feature_position,
+                     self.device,
+                     save_intermidiate_states=self.checking_mode,
+                     encoding_option=self.encoding_type)
+        mol.full_generation()
+        if self.checking_mode:
+            # check validity of the molecule
+            if not mol.is_valid():
+                self.non_valid_molecules.append(mol.intermidiate_states)
+        return mol.mol_graph
+
+    def generate_mol_list(self, n_mol, n_threads=4):
         mol_list = []
-        for i in tqdm(range(n_mol)):
-            mol = MolGen(self.GNN1_model, 
-                         self.GNN2_model, 
-                         self.GNN3_model, 
-                         self.encoding_size, 
-                         self.edge_size, 
-                         self.feature_position, 
-                         self.device, 
-                         save_intermidiate_states = self.checking_mode, 
-                         encoding_option = self.encoding_type)
-            mol.full_generation()
-            if self.checking_mode:
-                # check validity of the molecule 
-                if not mol.is_valid():
-                    self.non_valid_molecules.append(mol.intermidiate_states)
-            mol_list.append(mol.mol_graph)
+        
+        # Utilize ThreadPoolExecutor to parallelize the task
+        with ThreadPoolExecutor(max_workers=n_threads) as executor:
+            # Submit tasks to the thread pool
+            future_to_mol = {executor.submit(self.generate_single_molecule): i for i in range(n_mol)}
+            
+            # Collect the results as they become available
+            for future in concurrent.futures.as_completed(future_to_mol):
+                mol_graph = future.result()
+                mol_list.append(mol_graph)
+                
         return mol_list
 
