@@ -20,11 +20,7 @@ def main(args):
         print("it can crash if too many file are open in the process")
     # Call the train_GNN1 function with the provided arguments
 
-    if config['use_multithreading_on_epochs']: #not on batches
-        TrainingGNN1 = TrainGNN1_multithread(config)
-        
-    else :
-        TrainingGNN1 = TrainGNN1(config)
+    TrainingGNN1 = TrainGNN1(config)
         
     TrainingGNN1.train()
 
