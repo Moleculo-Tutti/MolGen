@@ -11,7 +11,7 @@ def main(args):
     # Load config file
     with open(args.config, 'r') as f:
         config = json.load(f)
-    if config['batch_size'] < 256:
+    if config['batch_size'] < 128:
         mp.set_sharing_strategy('file_system') # will cause memory  leak
         print("maybe you will have memory leak")
     else : 
