@@ -258,6 +258,14 @@ class TrainGNN3():
         # Store the 6 best models
         self.six_best_eval_loss = [(0, float('inf'))] * 6
 
+        if self.continue_training:
+            # Open the six best eval loss
+            with open(os.path.join(self.save_path, 'six_best_epochs.txt'), 'r') as f:
+                for i in range(6):
+                    line = f.readline()
+                    epoch, loss = line.split(',')
+                    self.six_best_eval_loss[i] = (int(epoch), float(loss))
+
     def load_data_model(self):
         # Load the data
         dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=3, feature_position=self.feature_position, scores_list=self.score_list)
