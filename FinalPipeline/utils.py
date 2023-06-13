@@ -16,6 +16,12 @@ cwd = os.getcwd()
 parent_dir = os.path.dirname(cwd)
 sys.path.append(parent_dir)
 
+cwd = os.getcwd()
+parent_dir = os.path.dirname(cwd)
+parent_parent_dir = os.path.dirname(parent_dir)
+sys.path.append(parent_dir)
+sys.path.append(parent_parent_dir)
+
 from DataPipeline.preprocessing import process_encode_graph, get_subgraph_with_terminal_nodes_step
 from DataPipeline.preprocessing import node_encoder
 from Model.GNN1 import ModelWithEdgeFeatures as GNN1
