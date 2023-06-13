@@ -10,4 +10,4 @@
 !*.json
 
 # Ignorer le dossier nommé trained_models
-trained_models/
+trained_models/**
