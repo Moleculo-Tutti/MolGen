@@ -316,7 +316,7 @@ class TrainGNN3():
         for epoch in tqdm(range(self.begin_epoch, self.n_epochs+1)):
             torch.cuda.empty_cache()
             save_epoch = False
-            if epoch % self.every_epoch_metric == 0:
+            if epoch % self.every_epoch_metric == 1:
                 loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score = train_one_epoch(
                     loader=self.loader_train,
                     model=self.model,
