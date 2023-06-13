@@ -8,11 +8,7 @@ import argparse
 import json
 import os
 
-cwd = os.getcwd()
-parent_dir = os.path.dirname(cwd)
-parent_parent_dir = os.path.dirname(parent_dir)
-sys.path.append(parent_dir)
-sys.path.append(parent_parent_dir)
+
 from utils import GenerationModule, MolGen, tensor_to_smiles
 
 
