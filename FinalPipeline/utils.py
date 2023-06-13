@@ -9,7 +9,7 @@ import os
 from rdkit import Chem
 from tqdm import tqdm
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import concurrent
 
 cwd = os.getcwd()
@@ -143,7 +143,7 @@ def load_model(checkpoint_path, model, optimizer):
 
 def get_model_GNN1(config, encoding_size, edge_size):
 
-    return GNN1(in_channels=encoding_size + int(config['feature_position']),
+    return GNN1(in_channels=encoding_size + int(config['feature_position'] + int(len(config['score_list']))),
                 hidden_channels_list=config["GCN_size"],
                 mlp_hidden_channels=config['mlp_hidden'],
                 edge_channels=edge_size, 
@@ -154,7 +154,7 @@ def get_model_GNN1(config, encoding_size, edge_size):
 
 def get_model_GNN2(config, encoding_size, edge_size):
 
-    return GNN2(in_channels=encoding_size + int(config['feature_position']), 
+    return GNN2(in_channels=encoding_size + int(config['feature_position'] + int(len(config['score_list']))),
                 hidden_channels_list=config["GCN_size"],
                 mlp_hidden_channels=config['mlp_hidden'],
                 edge_channels=edge_size, 
@@ -166,7 +166,7 @@ def get_model_GNN2(config, encoding_size, edge_size):
 def get_model_GNN3(config, encoding_size, edge_size):
 
     if config['graph_embedding']:
-        return GNN3_embedding(in_channels=encoding_size + int(config['feature_position']),
+        return GNN3_embedding(in_channels=encoding_size + int(config['feature_position'] + int(len(config['score_list']))),
                     hidden_channels_list=config["GCN_size"],
                     mlp_hidden_channels = config['mlp_hidden'],
                     edge_channels=edge_size, 
@@ -175,7 +175,7 @@ def get_model_GNN3(config, encoding_size, edge_size):
                     size_info=config['use_size'],
                     max_size=config['max_size'])
 
-    return GNN3(in_channels=encoding_size + int(config['feature_position']), 
+    return GNN3(in_channels=encoding_size + int(config['feature_position'] + int(len(config['score_list']))),
                 hidden_channels_list=config["GCN_size"],
                 edge_channels=edge_size, 
                 use_dropout=config['use_dropout'])
@@ -228,8 +228,23 @@ def select_node(tensor, edge_size):
 
     return tensor[max_index], max_index
 
+def add_score_features(subgraph, scores_list, desired_scores_list, GNN_type = 1):
+
+    if scores_list != []:
+        assert len(scores_list) == len(desired_scores_list) 
+        # Concat the scores to the node features
+        for i, score in enumerate(scores_list):
+            score_tensor = torch.tensor(desired_scores_list[i], dtype=torch.float).view(1, 1)
+            # Duplicate the score tensor to match the number of nodes in the subgraph
+            score_tensor = score_tensor.repeat(subgraph.x.size(0), 1)
+            subgraph.x = torch.cat([subgraph.x, score_tensor], dim=-1)
+            if GNN_type == 2:
+                subgraph.neighbor = torch.cat([subgraph.neighbor, torch.zeros((1, len(scores_list)))], dim=-1)
+    return subgraph
+
+
 class MolGen():
-    def __init__(self, GNN1, GNN2, GNN3, encoding_size, edge_size, feature_position, device, save_intermidiate_states = False, encoding_option = 'charged'):
+    def __init__(self, GNN1, GNN2, GNN3, encoding_size, edge_size, feature_position, device, save_intermidiate_states = False, encoding_option = 'charged', score_list = [], desired_score_list = []):
         mol_graph = create_torch_graph_from_one_atom(sample_first_atom(encoding_option), edge_size=edge_size, encoding_option=encoding_option)
         self.mol_graph = torch_geometric.data.Batch.from_data_list([mol_graph])
         self.queue = [0]
@@ -243,7 +258,9 @@ class MolGen():
         self.save_intermidiate_states = save_intermidiate_states
         if save_intermidiate_states:
             self.intermidiate_states = []
-        
+
+        self.score_list = score_list
+        self.desired_score_list = desired_score_list
 
     def one_step(self):
         with torch.no_grad():
@@ -258,6 +275,8 @@ class MolGen():
                 #add feature position
                 graph1.x = torch.cat([graph1.x, torch.zeros(graph1.x.size(0), 1)], dim=1)
                 graph1.x[0:current_node, -1] = 1
+
+            graph1 = add_score_features(graph1, self.score_list, self.desired_score_list, GNN_type = 1)
 
             prediction = self.GNN1(graph1.to(self.device))
             # Sample next node from prediction
@@ -290,6 +309,7 @@ class MolGen():
             encoded_predicted_node = torch.cat([encoded_predicted_node, torch.zeros(1, 1)], dim=1)
             graph2.neighbor = encoded_predicted_node
 
+            graph2 = add_score_features(graph2, self.score_list, self.desired_score_list, GNN_type = 2)
             prediction2 = self.GNN2(graph2.to(self.device))
 
             predicted_edge = torch.multinomial(F.softmax(prediction2, dim=1), 1).item()
@@ -313,6 +333,8 @@ class MolGen():
             mask = torch.cat((torch.zeros(current_node + 1), torch.ones(len(graph3.x) - current_node - 1)), dim=0).bool()
             mask[-1] = False
             graph3.mask = mask
+
+            graph3 = add_score_features(graph3, self.score_list, self.desired_score_list, GNN_type = 3)
             prediction3 = self.GNN3(graph3.to(self.device))
             softmax_prediction3 = F.softmax(prediction3, dim=1)[graph3.mask]
             if softmax_prediction3.size(0) == 0:
@@ -364,7 +386,7 @@ class MolGen():
 
 
 class GenerationModule():
-    def __init__(self, config1, config2, config3, encoding_size, edge_size, pathGNN1, pathGNN2, pathGNN3, checking_mode = False, encoding_type = 'charged'):
+    def __init__(self, config1, config2, config3, encoding_size, edge_size, pathGNN1, pathGNN2, pathGNN3, checking_mode = False, encoding_type = 'charged', score_list = [], desired_score_list = []):
         self.config1 = config1
         self.config2 = config2
         self.config3 = config3
@@ -373,6 +395,9 @@ class GenerationModule():
         self.encoding_type = encoding_type
         self.feature_position = config1["feature_position"]
         self.checking_mode = checking_mode
+
+        self.score_list = config1["score_list"]
+        self.desired_score_list = desired_score_list
 
         if self.checking_mode:
             self.non_valid_molecules = []
@@ -407,7 +432,9 @@ class GenerationModule():
                      self.feature_position,
                      self.device,
                      save_intermidiate_states=self.checking_mode,
-                     encoding_option=self.encoding_type)
+                     encoding_option=self.encoding_type,
+                     score_list=self.score_list,
+                     desired_score_list=self.desired_score_list)
         mol.full_generation()
         if self.checking_mode:
             # check validity of the molecule
@@ -415,7 +442,7 @@ class GenerationModule():
                 self.non_valid_molecules.append(mol.intermidiate_states)
         return mol.mol_graph
 
-    def generate_mol_list(self, n_mol, n_threads=4):
+    def generate_mol_list(self, n_mol, n_threads=8):
         mol_list = []
         
         # Utilize ThreadPoolExecutor to parallelize the task
@@ -424,7 +451,7 @@ class GenerationModule():
             future_to_mol = {executor.submit(self.generate_single_molecule): i for i in range(n_mol)}
             
             # Collect the results as they become available
-            for future in concurrent.futures.as_completed(future_to_mol):
+            for future in tqdm(as_completed(future_to_mol), total=n_mol, desc="Generating molecules"):
                 mol_graph = future.result()
                 mol_list.append(mol_graph)
                 
