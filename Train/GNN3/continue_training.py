@@ -11,31 +11,30 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
 def main(args):
-    #go to the file of the experience you want to continue and load the best model
+    # Go to the file of the experience you want to continue and load the best model
     path = Path('experiments/'+args.name_exp)
-    #open the file six_best_epoch.txt and read the number of the best epoch
+    # Open the file six_best_epoch.txt and read the number of the last epoch
     with open(path/'six_best_epochs.txt', 'r') as f:
         lines = f.readlines()
-        loss_values = [float(line.split('with loss ')[1]) for line in lines]
-        best_line_index = loss_values.index(min(loss_values))
+        epoch_values = [float(line.split(' ')[1]) for line in lines]
+        best_line_index = epoch_values.index(max(epoch_values))
+        loss_value = float(lines[best_line_index].split(' ')[-1])
+
     #load the best model and its adam optimizer
-    print('loading best checkpoint number {}'.format(best_line_index))
-    print('it had best loss of {}'.format(loss_values[best_line_index]))
+    print('Loading best checkpoint number {} of the epoch {} with a loss of {}'.format(best_line_index, epoch_values[best_line_index], loss_value))
+
     checkpoint = torch.load(path/'history_training/checkpoint_{}.pt'.format(best_line_index))
 
     # Call the train_GNN3 function with the provided arguments
-    file_path_config = path/'parameters.json'
+    file_path_config = path / 'parameters.json'
 
     # Ouvrir le fichier JSON et charger la configuration
     with open(file_path_config, "r") as file:
         config = json.load(file)    
     
-    if config['batch_size'] < 256:
-        print("you will have memory leak")
-        mp.set_sharing_strategy('file_system') # will cause memory  leak 
-    else : 
-        print("you won't have memory leak but you can have too number of open files")
-        mp.set_sharing_strategy('file_descriptor')#will work only if the number of batcj < 1024
+    # Call the train_GNN3 function with the provided arguments
+    mp.set_sharing_strategy('file_system') # Can cause memory leak
+    
     TrainingGNN3 = TrainGNN3(config, continue_training= True, checkpoint = checkpoint)
     TrainingGNN3.train()
 

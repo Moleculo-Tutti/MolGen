@@ -224,6 +224,8 @@ def custom_collate_GNN1(batch):
 
     sg_data_batch = Batch.from_data_list(sg_data_list)
     terminal_nodes_info_tensor = torch.stack(terminal_nodes_info_list, dim=0)
+    
+    del sg_data_list, terminal_nodes_info_list, batch
     return sg_data_batch, terminal_nodes_info_tensor
 
 def custom_collate_passive_add_feature_GNN2(batch):
@@ -250,6 +252,9 @@ def custom_collate_GNN2(batch):
 
     sg_data_batch = Batch.from_data_list(sg_data_list)
     terminal_nodes_info_tensor = torch.stack(terminal_nodes_info_list, dim=0)
+
+    del terminal_nodes_info_list, sg_data_list, batch
+
     return sg_data_batch, terminal_nodes_info_tensor
 
 def custom_collate_GNN3(batch):
@@ -261,6 +266,8 @@ def custom_collate_GNN3(batch):
     sg_data_batch = Batch.from_data_list(sg_data_list)
     cycle_label_tensor = torch.cat(cycle_label_list, dim=0)
     mask_tensor = torch.cat(mask_list, dim=0)
+
+    del cycle_label_list, mask_list, sg_data_list, batch
     
     return sg_data_batch, cycle_label_tensor, mask_tensor
 

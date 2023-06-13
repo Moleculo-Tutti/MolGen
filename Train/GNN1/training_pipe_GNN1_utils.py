@@ -71,8 +71,6 @@ def train_one_epoch(loader, model, encoding_size, device, optimizer, criterion, 
         optimizer.step()
 
         total_loss += loss.item() * data.num_graphs
-        del loss
-        del logit_out
 
 
         if epoch_metric:
@@ -111,9 +109,13 @@ def train_one_epoch(loader, model, encoding_size, device, optimizer, criterion, 
                                     count_per_class_recall=count_per_class_recall)
 
     if epoch_metric:
+        # Garbage collection
+        del loss, out, logit_out, data, terminal_node_infos, recall_output, precision_output, num_correct, num_correct_recall, num_correct_precision, count_per_class_recall, count_per_class_precision
         return total_loss / len(loader.dataset), current_avg_label_vector, current_avg_output_vector, avg_correct , avg_correct_precision, avg_correct_recall
     else:
+        del loss, out, logit_out, data, terminal_node_infos
         return total_loss / len(loader.dataset), None, None, None, None, None
+
 
 
 
@@ -164,6 +166,8 @@ def eval_one_epoch(loader, model, encoding_size, device, criterion, print_bar = 
         avg_correct = num_correct / total_graphs_processed
         avg_correct_recall = num_correct_recall / count_per_class_recall
         avg_correct_precision = num_correct_precision / count_per_class_precision
+
+    del loss, out, logit_out, data, terminal_node_infos, recall_output, precision_output, num_correct, num_correct_recall, num_correct_precision, count_per_class_recall, count_per_class_precision
 
     return total_loss / (val_metric_size * len(loader.dataset)), current_avg_label_vector, current_avg_output_vector, avg_correct , avg_correct_precision, avg_correct_recall
 
@@ -353,6 +357,9 @@ class TrainGNN1():
                 with open(six_best_epochs_file, 'w') as file:
                     for epoch, loss in self.six_best_eval_loss:
                         file.write(f'Epoch {epoch} with loss {loss}\n')
+
+                del checkpoint, epoch_save_file, six_best_epochs_file, training_csv_directory, eval_csv_directory, file
+            del loss
             gc.collect()
         
 

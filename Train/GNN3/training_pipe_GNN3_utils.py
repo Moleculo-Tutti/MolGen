@@ -117,7 +117,6 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoc
                 pseudo_precision = global_cycles_created/(global_cycles_created+global_cycles_shouldnt_created),  pseudo_recall = global_cycles_created/global_num_wanted_cycles ,
                 pseudo_recall_placed = global_well_placed_cycles/global_num_wanted_cycles, pseudo_recall_type = global_well_type_cycles/global_num_wanted_cycles, 
                 conditional_precision_placed = conditional_precision_placed, f1_score = f1_score)
-    gc.collect()        
     if epoch_metric:
         return (
             total_loss / len(loader.dataset),
@@ -310,6 +309,14 @@ class TrainGNN3():
 
         with open(file_path, "w") as file:
             json.dump(self.config, file)
+        
+        if self.continue_training:
+            # Add the previous training history
+            self.training_history = pd.read_csv(os.path.join(self.directory_path_experience, "training_history.csv"), index_col=0)
+            self.eval_history = pd.read_csv(os.path.join(self.directory_path_experience, "eval_history.csv"), index_col=0)
+            # Keep only the losses above the begin epoch
+            self.training_history = self.training_history[self.training_history['epoch'] < self.begin_epoch]
+            self.eval_history = self.eval_history[self.eval_history['epoch'] < self.begin_epoch]
     
     def train(self):
 
@@ -374,12 +381,14 @@ class TrainGNN3():
 
                 training_csv_directory = os.path.join(self.directory_path_experience, 'training_history.csv')
                 if os.path.exists(training_csv_directory):
+                    # If the file already exists, we append the new data
                     self.training_history.to_csv(training_csv_directory, mode='a', header=False)
                 else:
                     self.training_history.to_csv(training_csv_directory)   
 
                 eval_csv_directory = os.path.join(self.directory_path_experience, 'eval_history.csv')    
-                if os.path.exists(eval_csv_directory):
+                if os.path.exists(eval_csv_directory):        
+                    # If the file already exists, we append the new data
                     self.eval_history.to_csv(eval_csv_directory, mode='a', header=False)
                 else:
                     self.eval_history.to_csv(eval_csv_directory)

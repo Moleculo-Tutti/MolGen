@@ -18,6 +18,7 @@ def pseudo_accuracy_metric(model_output, target, random = False):
         if target[i][model_output[i]] > 0.01:
             correct += 1
 
+    del model_output, target
     return correct
 
 
@@ -92,7 +93,6 @@ def pseudo_accuracy_metric_gnn3(model_input, model_output, target, mask, edge_si
     
     # Garbage collection
     del cumsum_node_counts, current_graph_target, current_graph_output, mask_graph, current_graph_output_masked, sum_on_first_dims, max_index, vector_predicted, prediction
-    gc.collect()
     
     return cycles_created , good_cycles_created , good_types_cycles_predicted , cycles_not_created , cycles_shouldnt_created, num_wanted_cycles
 
@@ -113,7 +113,7 @@ def pseudo_recall_for_each_class(model_output, target, random = False):
             count_per_class[model_output[i]] += 1
         else:
             count_per_class[target[i].argmax(dim=0)] += 1
-
+    del model_output, target, encoding_size
     return correct, count_per_class
 
 
@@ -132,5 +132,5 @@ def pseudo_precision_for_each_class(model_output, target, random=False):
         if target[i][model_output[i]] > 0.01:
             correct[model_output[i]] += 1
         count_per_class[model_output[i]] += 1
-
+    del model_output, target, encoding_size
     return correct, count_per_class
