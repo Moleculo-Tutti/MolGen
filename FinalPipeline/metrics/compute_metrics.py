@@ -7,8 +7,8 @@ import concurrent.futures
 
 from rdkit import Chem
 
-data_path = Path('..') / '..' / 'DataPipeline' / 'data' / 'generated_molecules_10000_charged_kekulized.csv'
-output_dir = Path('..') / '..' / 'DataPipeline' / 'data' / 'scored_data'
+data_path = Path('..') / 'generated_mols' / 'generated_molecules_1000_True_charged_GNN_scored_logp_[4.0].csv'
+output_dir = Path('..') / 'generated_mols' / 'scored' 
 
 smiles_col = 'SMILES'
 
@@ -59,11 +59,11 @@ def main(args, n_threads=4):
     data['n_rings'] = [metrics['n_rings'] for metrics in metrics_list]
     
     # Save to output_dir
-    data.to_csv(output_dir / 'output.csv', index=False)
+    data.to_csv(output_dir / 'generated_molecules_1000_True_charged_GNN_scored_logp_[4.0]_scored.csv', index=False)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--n_threads', default=4, type=int, help='Number of threads to use')
+    parser.add_argument('--n_threads', default=1, type=int, help='Number of threads to use')
     args = parser.parse_args()
     main(args, n_threads=args.n_threads)
