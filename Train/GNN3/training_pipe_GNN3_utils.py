@@ -117,6 +117,7 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoc
                 pseudo_precision = global_cycles_created/(global_cycles_created+global_cycles_shouldnt_created),  pseudo_recall = global_cycles_created/global_num_wanted_cycles ,
                 pseudo_recall_placed = global_well_placed_cycles/global_num_wanted_cycles, pseudo_recall_type = global_well_type_cycles/global_num_wanted_cycles, 
                 conditional_precision_placed = conditional_precision_placed, f1_score = f1_score)
+        del data, node_labels, mask, out, softmax_out
     if epoch_metric:
         return (
             total_loss / len(loader.dataset),
@@ -185,7 +186,7 @@ def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False,
 
                 total_loss += loss.item() * data.num_graphs
                 total_graphs_processed += data.num_graphs
-                del loss
+                del loss, data, node_labels, mask, out
 
     denominator = global_cycles_created + global_cycles_shouldnt_created + global_num_wanted_cycles
     if denominator == 0:
@@ -197,7 +198,8 @@ def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False,
         conditional_precision_placed = 1
     else:
         conditional_precision_placed = global_well_placed_cycles / (global_cycles_created)
-    del softmax_out, cycles_created, well_placed_cycles, well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles
+    del softmax_out, cycles_created, well_placed_cycles, well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles, denominator
+    
     return (
         total_loss / (len(loader.dataset) * val_metric_size),
         num_output / total_graphs_processed,

@@ -93,7 +93,7 @@ def pseudo_accuracy_metric_gnn3(model_input, model_output, target, mask, edge_si
     
     # Garbage collection
     del cumsum_node_counts, current_graph_target, current_graph_output, mask_graph, current_graph_output_masked, sum_on_first_dims, max_index, vector_predicted, prediction
-    
+    del start_index, end_index, has_cycle
     return cycles_created , good_cycles_created , good_types_cycles_predicted , cycles_not_created , cycles_shouldnt_created, num_wanted_cycles
 
 def pseudo_recall_for_each_class(model_output, target, random = False):
