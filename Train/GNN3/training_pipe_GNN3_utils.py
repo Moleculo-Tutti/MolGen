@@ -110,7 +110,7 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoc
             else:
                 conditional_precision_placed = global_well_placed_cycles/(global_cycles_created)
 
-            del softmax_out, cycles_created, well_placed_cycles, well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles
+            del cycles_created, well_placed_cycles, well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles
 
             if print_bar:
                 progress_bar.set_postfix(loss=loss_value, avg_num_output=num_output / total_graphs_processed, avg_num_labels=num_labels / total_graphs_processed,
