@@ -84,7 +84,8 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoc
 
         if epoch_metric:
 
-            cycles_created, well_placed_cycles , well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles = pseudo_accuracy_metric_gnn3(data,out,node_labels,mask, edge_size = size_edge)      
+            cycles_created, well_placed_cycles , well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles = pseudo_accuracy_metric_gnn3(
+                data.detach().cpu(), out.detach().cpu(), node_labels.detach().cpu(), mask.detach().cpu(), edge_size = size_edge)      
             # Calculate metrics and move tensors to CPU
             num_output += torch.sum(softmax_out[mask], dim=0).detach().cpu()
             num_labels += torch.sum(node_labels[mask], dim=0).detach().cpu()
@@ -173,7 +174,7 @@ def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False,
                 softmax_out = F.softmax(out, dim=1)
 
                 cycles_created, well_placed_cycles, well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles = pseudo_accuracy_metric_gnn3(
-                    data, out, node_labels, mask, edge_size=size_edge)
+                data.detach().cpu(), out.detach().cpu(), node_labels.detach().cpu(), mask.detach().cpu(), edge_size = size_edge) 
 
                 num_output += torch.sum(softmax_out[mask], dim=0).detach().cpu()
                 num_labels += torch.sum(node_labels[mask], dim=0).detach().cpu()

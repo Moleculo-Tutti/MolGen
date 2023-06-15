@@ -1,5 +1,5 @@
 {
-    "name": "GNN3_charged_kekulized_scores_QED",
+    "name": "GNN3_charged_kekulized_scores_SA",
     "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_charged_kekulized_scores.pt",
     "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_charged_kekulized_scores.pt",
     "n_epochs": 1000,
@@ -17,5 +17,5 @@
     "num_workers": 32,
     "use_size": true,
     "max_size": 40,
-    "score_list" : ["QED"]
+    "score_list" : ["SA"]
 }
