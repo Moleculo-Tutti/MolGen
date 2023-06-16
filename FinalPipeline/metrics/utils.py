@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import torch
 
 from rdkit import Chem
@@ -8,7 +9,20 @@ from rdkit.Chem.AllChem import GetMorganFingerprintAsBitVect as Morgan
 from rdkit.Chem.QED import qed
 from rdkit.Chem.Scaffolds import MurckoScaffold
 from rdkit.Chem import Descriptors
-from SA_Score import sascorer
+from rdkit import Chem
+from rdkit import DataStructs
+from rdkit.Chem import AllChem
+import itertools
+
+import os
+import sys
+cwd = os.getcwd()
+parent_dir = os.path.dirname(cwd)
+parent_parent_dir = os.path.dirname(parent_dir)
+sys.path.append(parent_dir)
+sys.path.append(parent_parent_dir)
+
+from metrics.SA_Score import sascorer
 
 import scipy.sparse
 
@@ -118,89 +132,33 @@ def calculate_validity(batch_smiles):
     validity = len(valid_molecules) / len(batch_smiles)
     return validity,valid_molecules
 
-def fingerprint(smiles_or_mol, fp_type='maccs', dtype=None, morgan__r=2,
-                morgan__n=1024, *args, **kwargs):
+
+
+
+def compute_internal_diversity(smiles_list):
     """
-    Generates fingerprint for SMILES
-    If smiles is invalid, returns None
-    Returns numpy array of fingerprint bits
-
-    Parameters:
-        smiles: SMILES string
-        type: type of fingerprint: [MACCS|morgan]
-        dtype: if not None, specifies the dtype of returned array
-    """
-    fp_type = fp_type.lower()
-    molecule = canonic_smiles(smiles_or_mol, *args, **kwargs)
-    if molecule is None:
-        return None
-    if fp_type == 'maccs':
-        keys = MACCSkeys.GenMACCSKeys(molecule)
-        keys = np.array(keys.GetOnBits())
-        fingerprint = np.zeros(166, dtype='uint8')
-        if len(keys) != 0:
-            fingerprint[keys - 1] = 1  # We drop 0-th key that is always zero
-    elif fp_type == 'morgan':
-        fingerprint = np.asarray(Morgan(molecule, morgan__r, nBits=morgan__n),
-                                 dtype='uint8')
-    else:
-        raise ValueError("Unknown fingerprint type {}".format(fp_type))
-    if dtype is not None:
-        fingerprint = fingerprint.astype(dtype)
-    return fingerprint
-
-
-def fingerprints(smiles_mols_array, already_unique=False, *args, **kwargs):
-    '''
-    Computes fingerprints of smiles np.array/list/pd.Series.
-    Inserts np.NaN to rows corresponding to incorrect smiles.
-    IMPORTANT: if there is at least one np.NaN, the dtype would be float
-    Parameters:
-        smiles_mols_array: list/array/pd.Series of smiles or already computed
-            RDKit molecules
-        already_unique: flag for performance reasons, if smiles array is big
-            and already unique. Its value is set to True if smiles_mols_array
-            contain RDKit molecules already.
-    '''
-    if isinstance(smiles_mols_array, pd.Series):
-        smiles_mols_array = smiles_mols_array.values
-    else:
-        smiles_mols_array = np.asarray(smiles_mols_array)
-    if not isinstance(smiles_mols_array[0], str):
-        already_unique = True
-
-    if not already_unique:
-        smiles_mols_array, inv_index = np.unique(smiles_mols_array,
-                                                 return_inverse=True)
+    Compute the internal diversity of a list of SMILES strings based on Tanimoto similarity.
     
-    # Loop through the array and calculate fingerprints
-    fps = [fingerprint(smiles_or_mol, *args, **kwargs) for smiles_or_mol in smiles_mols_array]
-
-    length = 1
-    for fp in fps:
-        if fp is not None:
-            length = fp.shape[-1]
-            first_fp = fp
-            break
-    fps = [fp if fp is not None else np.array([np.NaN]).repeat(length)[None, :]
-           for fp in fps]
-    if scipy.sparse.issparse(first_fp):
-        fps = scipy.sparse.vstack(fps).tocsr()
-    else:
-        fps = np.vstack(fps)
+    Args:
+        smiles_list (list of str): List of SMILES strings representing the molecules.
     
-    if not already_unique:
-        return fps[inv_index]
-    return fps
-
-
-def internal_diversity(gen, n_jobs=1, device='cpu', fp_type='morgan',
-                       gen_fps=None, p=1):
+    Returns:
+        float: The internal diversity of the molecules.
     """
-    Computes internal diversity as:
-    1/|A|^2 sum_{x, y in AxA} (1-tanimoto(x, y))
-    """
-    if gen_fps is None:
-        gen_fps = fingerprints(gen, fp_type=fp_type, n_jobs=n_jobs)
-    return 1 - (average_agg_tanimoto(gen_fps, gen_fps,
-                                     agg='mean', device=device, p=p)).mean()
+    # Convert SMILES strings to RDKit Mol objects
+    molecules = [Chem.MolFromSmiles(smiles) for smiles in smiles_list]
+    
+    # Compute fingerprints for all molecules
+    fps = [AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=1024) for mol in molecules]
+    
+    # Calculate Tanimoto similarities for each pair of fingerprints
+    similarities = []
+    for fp1, fp2 in itertools.combinations(fps, 2):
+        similarity = DataStructs.TanimotoSimilarity(fp1, fp2)
+        similarities.append(similarity)
+    
+    # Compute the internal diversity as the mean Tanimoto similarity
+    internal_diversity = sum(similarities) / len(similarities) if similarities else 0.0
+    
+    return 1 - internal_diversity
+
