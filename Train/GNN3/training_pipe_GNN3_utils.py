@@ -263,7 +263,7 @@ class TrainGNN3():
 
         if self.continue_training:
             # Open the six best eval loss
-            with open(os.path.join(self.save_path, 'six_best_epochs.txt'), 'r') as f:
+            with open(os.path.join(self.directory_path_experience, 'six_best_epochs.txt'), 'r') as f:
                 for i in range(6):
                     line = f.readline()
                     epoch, loss = line.split(',')
