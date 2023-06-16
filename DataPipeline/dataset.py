@@ -190,7 +190,7 @@ class ZincSubgraphDatasetStep(Dataset):
             subgraph.cycle_label = node_features_label
             subgraph.mask = mask
             # Clean the memory 
-            del node_features_label, mask, neighbor, edge_neighbor_attr, add_edge_index, node1, node2, id_chosen, opposite_mask, terminal_nodes, score_tensor, preprocessed_graph
+            del node_features_label, mask, neighbor, edge_neighbor_attr, add_edge_index, node1, node2, id_chosen, opposite_mask, terminal_nodes, preprocessed_graph
 
         return subgraph
     
