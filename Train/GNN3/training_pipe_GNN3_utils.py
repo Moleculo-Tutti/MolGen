@@ -266,7 +266,8 @@ class TrainGNN3():
             with open(os.path.join(self.directory_path_experience, 'six_best_epochs.txt'), 'r') as f:
                 for i in range(6):
                     line = f.readline()
-                    epoch, loss = line.split(',')
+                    epoch, loss = line.split(' with loss ')  # Utilisez ' with loss ' comme séparateur
+                    epoch = epoch.split('Epoch ')[1]  # Supprimez 'Epoch ' de la valeur de l'époque
                     self.six_best_eval_loss[i] = (int(epoch), float(loss))
 
     def load_data_model(self):
