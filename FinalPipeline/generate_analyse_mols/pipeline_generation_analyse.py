@@ -7,6 +7,7 @@ from path import Path
 import argparse
 import json
 import os
+from scipy.stats import wasserstein_distance
 
 from rdkit import Chem
 
@@ -94,6 +95,8 @@ def calculate_statistics(data, zinc_data, file_path):
     uniqueness, unique_molecules = calculate_uniqueness(valid_molecules)
     novelty, non_new_mols = calculate_novelty(unique_molecules, zinc_data['smiles'].tolist())
     
+    # compute waterstein distance between the generated and the zinc dataset
+
     # Calculate statistics for the generated dataset
     gen_statistics = {
         'Number of molecules': len(data),
@@ -109,7 +112,13 @@ def calculate_statistics(data, zinc_data, file_path):
         'Weight mean': data['weight'].mean(),
         'Weight std': data['weight'].std(),
         'Number of rings mean': data['n_rings'].mean(),
-        'Number of rings std': data['n_rings'].std()
+        'Number of rings std': data['n_rings'].std(),
+        'Wasserstein distance SA': wasserstein_distance(data['SA'], zinc_data['SA']),
+        'Wasserstein distance logP': wasserstein_distance(data['logP'], zinc_data['logP']),
+        'Wasserstein distance QED': wasserstein_distance(data['QED'], zinc_data['QED']),
+        'Wasserstein distance weight': wasserstein_distance(data['weight'], zinc_data['weight']),
+        'Wasserstein distance number of rings': wasserstein_distance(data['n_rings'], zinc_data['n_rings']),
+        'Average Wasserstein distance': np.mean([wasserstein_distance(data['SA'], zinc_data['SA']), wasserstein_distance(data['logP'], zinc_data['logP']), wasserstein_distance(data['QED'], zinc_data['QED']), wasserstein_distance(data['weight'], zinc_data['weight'])])
     }
     
     # Calculate statistics for the ZINC dataset
