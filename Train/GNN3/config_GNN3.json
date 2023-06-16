@@ -1,8 +1,8 @@
 {
-    "name": "GNN3_test_mem_leak",
+    "name": "GNN3_charged_kekulized_scores_QED_SA_V2",
     "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_charged_kekulized_scores.pt",
     "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_charged_kekulized_scores.pt",
-    "n_epochs": 1,
+    "n_epochs": 1000,
     "GCN_size": [32, 64, 128, 128, 256, 256],
     "mlp_hidden": 128,
     "feature_position" : true,
@@ -13,9 +13,9 @@
     "print_bar": false,
     "every_epoch_save" : 50,
     "every_epoch_metric" : 50,
-    "val_metric_size" : 1,
-    "num_workers": 0,
+    "val_metric_size" : 10,
+    "num_workers": 32,
     "use_size": true,
     "max_size": 40,
-    "score_list" : ["SA"]
+    "score_list" : ["QED", "SA"]
 }
