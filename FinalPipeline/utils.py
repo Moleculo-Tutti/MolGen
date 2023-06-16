@@ -239,8 +239,8 @@ def add_score_features(subgraph, scores_list, desired_scores_list, GNN_type = 1)
             # Duplicate the score tensor to match the number of nodes in the subgraph
             score_tensor = score_tensor.repeat(subgraph.x.size(0), 1)
             subgraph.x = torch.cat([subgraph.x, score_tensor], dim=-1)
-            if GNN_type == 2:
-                subgraph.neighbor = torch.cat([subgraph.neighbor, torch.zeros((1, len(scores_list)))], dim=-1)
+        if GNN_type == 2:
+            subgraph.neighbor = torch.cat([subgraph.neighbor, torch.zeros((1, len(scores_list)))], dim=-1)
     return subgraph
 
 
@@ -306,11 +306,17 @@ class MolGen():
                 graph2.x = torch.cat([graph2.x, torch.zeros(graph2.x.size(0), 1)], dim=1)
                 graph2.x[0:current_node, -1] = 1
 
-            #add zeros to the neighbor
-            encoded_predicted_node = torch.cat([encoded_predicted_node, torch.zeros(1, 1)], dim=1)
+                #add zeros to the neighbor
+                encoded_predicted_node = torch.cat([encoded_predicted_node, torch.zeros(1, 1)], dim=1)
+
+    
             graph2.neighbor = encoded_predicted_node
 
+
+
             graph2 = add_score_features(graph2, self.score_list, self.desired_score_list, GNN_type = 2)
+
+            assert graph2.x.size(1) == graph2.neighbor.size(1)
             prediction2 = self.GNN2(graph2.to(self.device))
 
             predicted_edge = torch.multinomial(F.softmax(prediction2, dim=1), 1).item()
@@ -443,7 +449,7 @@ class GenerationModule():
                 self.non_valid_molecules.append(mol.intermidiate_states)
         return mol.mol_graph
 
-    def generate_mol_list(self, n_mol, n_threads=8):
+    def generate_mol_list(self, n_mol, n_threads=1):
         mol_list = []
         
         # Utilize ThreadPoolExecutor to parallelize the task
