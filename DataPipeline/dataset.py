@@ -177,6 +177,7 @@ class ZincSubgraphDatasetStep(Dataset):
                 opposite_mask[node1] = False
                 # we add the opposite of the mask to the node features that correspond to the feature_position
                 subgraph.x = torch.cat((subgraph.x, opposite_mask.unsqueeze(1)), dim=1) 
+                del opposite_mask
 
             if self.scores_list != []:
                 # Concat the scores to the node features
@@ -190,7 +191,7 @@ class ZincSubgraphDatasetStep(Dataset):
             subgraph.cycle_label = node_features_label
             subgraph.mask = mask
             # Clean the memory 
-            del node_features_label, mask, neighbor, edge_neighbor_attr, add_edge_index, node1, node2, id_chosen, opposite_mask, terminal_nodes, preprocessed_graph
+            del node_features_label, mask, neighbor, edge_neighbor_attr, add_edge_index, node1, node2, id_chosen, terminal_nodes, preprocessed_graph
 
         return subgraph
     
