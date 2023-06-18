@@ -25,12 +25,15 @@ class CustomMessagePassingLayer(MessagePassing):
 
 
 class ModelWithEdgeFeatures(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels_list, edge_channels, use_dropout=True, use_batchnorm=True):
+    def __init__(self, in_channels, hidden_channels_list, edge_channels, num_classes, use_dropout=True, use_batchnorm=True, size_info = False, max_size = 40):
         torch.manual_seed(12345)
         super(ModelWithEdgeFeatures, self).__init__()
 
         self.use_dropout = use_dropout
         self.use_batchnorm = use_batchnorm
+        self.size_info = size_info
+        self.num_classes = num_classes
+        self.max_size = max_size
 
         self.message_passing_layers = torch.nn.ModuleList()
         self.batch_norm_layers = torch.nn.ModuleList()
@@ -56,7 +59,7 @@ class ModelWithEdgeFeatures(torch.nn.Module):
                 x = F.relu(x)
             if self.use_dropout and  message_passing_layer != self.message_passing_layers[-1]:
                 x = F.dropout(x, training=self.training)
-        
+
         return x
     
 
