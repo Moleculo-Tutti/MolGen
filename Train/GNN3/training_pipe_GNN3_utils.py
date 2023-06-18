@@ -296,7 +296,9 @@ class TrainGNN3():
             model = ModelWithEdgeFeatures(in_channels=encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
                                         hidden_channels_list=self.GCN_size,
                                         edge_channels=edge_size, 
+                                        num_classes=edge_size,
                                         use_dropout=self.use_dropout,
+                                        size_info=self.size_info,
                                         max_size=self.max_size)
 
         
