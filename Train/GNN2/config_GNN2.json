@@ -3,7 +3,7 @@
     "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_charged_kekulized_scores.pt",
     "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_charged_kekulized_scores.pt",
     "GCN_size": [64, 128, 256, 512, 512],
-    "n_epochs": 3000,
+    "n_epochs": 2000,
     "mlp_hidden": 512,
     "batch_size": 128,
     "use_size": false,

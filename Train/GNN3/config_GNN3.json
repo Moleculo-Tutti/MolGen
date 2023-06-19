@@ -1,11 +1,11 @@
 {
-    "name": "GNN3_no_size_no_position",
+    "name": "GNN3_charged_kekulized_scores_QED_SA",
     "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_charged_kekulized_scores.pt",
     "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_charged_kekulized_scores.pt",
-    "n_epochs": 3000,
+    "n_epochs": 2000,
     "GCN_size": [64, 128, 256, 256, 512, 512],
     "mlp_hidden": 128,
-    "feature_position" : false,
+    "feature_position" : true,
     "graph_embedding": true,
     "batch_size": 128,
     "use_dropout": false,
@@ -17,5 +17,5 @@
     "num_workers": 32,
     "use_size": true,
     "max_size": 40,
-    "score_list" : []
+    "score_list" : ["QED", "SA"]
 }
