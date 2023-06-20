@@ -230,8 +230,20 @@ class GDCTrainer():
             loss (torch.tensor) []: mean loss value across the batch
             stats (dict) : training statistics
         """
-        
 
-
+    def step(self,query,reponse,score)
+        """
+        This is the main training function. It runs a off-policy DPG (with proposal q) optimization step which includes :
+        1. Sample continuations from proposal distribution q(x) which is self.ref_model 
+            (already done and output is passed as response)
+        2. Compute P(x) / pi(x)
+        3. Compute Loss = (P(x) / q(x)) log pi(x) and update policy pi
+        Args:
+            query (torch.tensor): tensor containing the encoded queries, shape [batch_size, query_length]
+            response (torch.tensor): tensor containing the continuation token ids. These were obtained from gdc.gpt2.respond_to_batch().
+            scores (torch.tensor): tensor containing the  P(x)/ q(x), shape [batch_size]
+        Returns:
+            train_stats (dict): a summary of the training statistics for logging purposes.
+        """
 
         
