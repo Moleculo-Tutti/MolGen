@@ -33,6 +33,8 @@ ZINC_DATA_PATH = SCORED_SAVING_DIR / 'scored_zinc.csv'
 SAVE_RESULTS_PATH = Path('..') / 'generate_analyse_mols' / 'results'
 
 def parse_list_of_floats(input_string):
+    if input_string == "":
+        return []
     return [float(item) for item in input_string.split(',')]
 
 # Convert the graph to smiles
@@ -282,7 +284,7 @@ if __name__ == "__main__":
     parser.add_argument('--keku', type=bool, default=True, help='Kekulize the molecules')
     parser.add_argument('--encod', type=str, default='charged', help='Encoding type')
     parser.add_argument('--exp_name', type=str, default='exp', help='Name of the experience')
-    parser.add_argument('--desired_scores_list', type=parse_list_of_floats, default="0.5,0.5,0.5", help='Desired scores for the molecules')
+    parser.add_argument('--desired_scores_list', type=parse_list_of_floats, default="", help='Desired scores for the molecules')
     parser.add_argument('--n_threads', default=1, type=int, help='Number of threads to use')
 
     args = parser.parse_args()

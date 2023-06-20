@@ -198,6 +198,7 @@ def add_edge_or_node_to_graph(graph, initial_node, edge_attr, other_node=None, n
     if new_node_attr is not None:
 
         # Add new node to graph
+        assert graph.x.size(1) == new_node_attr.size(1)
 
         graph.x = torch.cat([graph.x, new_node_attr], dim=0)
 
@@ -312,8 +313,6 @@ class MolGen():
     
             graph2.neighbor = encoded_predicted_node
 
-
-
             graph2 = add_score_features(graph2, self.score_list, self.desired_score_list, GNN_type = 2)
 
             assert graph2.x.size(1) == graph2.neighbor.size(1)
@@ -323,10 +322,14 @@ class MolGen():
             encoded_predicted_edge = torch.zeros(prediction2.size(), dtype=torch.float)
             encoded_predicted_edge[0, predicted_edge] = 1
 
+            # Create a new node that is going to be added to the graph
+            new_node = torch.zeros(1, self.encoding_size, dtype=torch.float)
+            new_node[0, predicted_node] = 1
+            
             #GNN3
 
             # Add the node and the edge to the graph
-            new_graph = add_edge_or_node_to_graph(self.mol_graph.clone(), current_node, encoded_predicted_edge, new_node_attr = encoded_predicted_node[:, :-1])
+            new_graph = add_edge_or_node_to_graph(self.mol_graph.clone(), current_node, encoded_predicted_edge, new_node_attr = new_node)
             graph3 = new_graph.clone()
 
             # Add a one of the last node that are going to possibly bond to another node
@@ -451,16 +454,21 @@ class GenerationModule():
 
     def generate_mol_list(self, n_mol, n_threads=1):
         mol_list = []
-        
-        # Utilize ThreadPoolExecutor to parallelize the task
-        with ThreadPoolExecutor(max_workers=n_threads) as executor:
-            # Submit tasks to the thread pool
-            future_to_mol = {executor.submit(self.generate_single_molecule): i for i in range(n_mol)}
-            
-            # Collect the results as they become available
-            for future in tqdm(as_completed(future_to_mol), total=n_mol, desc="Generating molecules"):
-                mol_graph = future.result()
+        if n_threads == 1:
+            for i in tqdm(range(n_mol), desc="Generating molecules"):
+                mol_graph = self.generate_single_molecule()
                 mol_list.append(mol_graph)
+        else:
+
+            # Utilize ThreadPoolExecutor to parallelize the task
+            with ThreadPoolExecutor(max_workers=n_threads) as executor:
+                # Submit tasks to the thread pool
+                future_to_mol = {executor.submit(self.generate_single_molecule): i for i in range(n_mol)}
                 
+                # Collect the results as they become available
+                for future in tqdm(as_completed(future_to_mol), total=n_mol, desc="Generating molecules"):
+                    mol_graph = future.result()
+                    mol_list.append(mol_graph)
+                    
         return mol_list
 

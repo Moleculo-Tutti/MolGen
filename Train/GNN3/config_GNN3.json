@@ -1,15 +1,15 @@
 {
-    "name": "GNN3_charged_kekulized_scores_SA",
+    "name": "GNN3_charged_kekulized_lr_10-3",
     "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_charged_kekulized_scores.pt",
     "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_charged_kekulized_scores.pt",
-    "n_epochs": 2000,
+    "n_epochs": 1000,
     "GCN_size": [64, 128, 256, 256, 512, 512],
-    "mlp_hidden": 128,
+    "mlp_hidden": 256,
     "feature_position" : true,
     "graph_embedding": true,
     "batch_size": 128,
     "use_dropout": false,
-    "lr": 0.0001,
+    "lr": 0.001,
     "print_bar": false,
     "every_epoch_save" : 50,
     "every_epoch_metric" : 50,
@@ -17,5 +17,5 @@
     "num_workers": 32,
     "use_size": true,
     "max_size": 40,
-    "score_list" : ["SA"]
+    "score_list" : []
 }
