@@ -9,44 +9,88 @@ import os
 from models import Models_GNN
 
 
-def sample_from_model(model, args, batch_size,constraints,lambdas ):
-    timing = dict()
-    all_molecules_tensor = []
-    # Sample molecules for this batch
-    for i in range(args.n_sample):
-        pass
-
-        all_molecules_tensor.append( mol_generated)
-        #generate a full molecule
-
-    # calculating features / constraints over the molecule generated
-    all_constraints_value = {}
-    for constraint_name in constraints:
-        fn = constraints[constraint_name]
-        cur_value = []
-        for i in range(batch_size):
-            mol_generated =  all_molecules_tensor[i]
-            #get the smiles conversion with rdkit
-            smiles_generated = mol_generated.to_smiles()
-            res = fn(smiles_generated)
-            cur_values.append(res)
-        cur_values = torch.cat(cur_values, dim=0)
-        all_constraints_value[constraint_name] = cur_values.to(args.device)
-
-    #coputing exponents for EBM
-    lambda_dict = lambdas
-    assert set(lambda_dict.keys()) == set(constraints.keys())
-    constraint_names= all_constraints_value.keys()
-
-    phi_tensor = torch.stack([all_constraints_value[constraint_name] for constraint_name in constraint_names], dim=1)
-    lambda_tensor = torch.stack([lambda_dict[constraint_name] for constraint_name in constraint_names]).repeat(batch_size, 1).to(args.device)
-    exponents = lambda_tensor.mul(phi_tensor).sum(dim=1)
-
-    return game_data, timing, query_tensors, all_molecules_tensor, all_constraints_value, exponents
+def append_node_link(true_graphs, next_step_gnn1, next_step_gnn2):
+    pass
 
 
+def sample_path_from_model(model_q, model_a, model_pi,features,lambdas, batch_size = 128, device = 'cuda' ):
+    #this function compute a batch of x ( so paths) and the corresponding q(x), a(x), pi(x)
+    #it also compute the features of the final molecule so that we can compute the exponents
 
-class GDCTrainer():
+    #we first sample a batch of x
+    #generate a batch of initial_atoms 
+    true_graphs = torch.zeros(batch_size).to(device)
+    true_graphs = torch([initial_atom() for i in range(batch_size)])
+    
+    a_value = torch.zeros(batch_size).to(device)
+    q_value = torch.zeros(batch_size).to(device)
+    pi_value = torch.zeros(batch_size).to(device)
+    
+    while not_all_atoms_finished :
+        #compute the gnn1 and apply softmax
+        output_gnn1_q = torch.softmax(model_q.GNN1(true_graphs), dim = 1)
+        output_gnn1_a = torch.softmax(model_a.GNN1(true_graphs),  dim = 1)
+        output_gnn1_pi = torch.softmax(model_pi.GNN1(true_graphs), dim = 1)
+
+        #for each graph in the ouptut_gnn1_q we sample with a multinomial
+        next_step_gnn1 = torch.multinomial(output_gnn1_q, 1) #shape (batch_size, 1)
+
+        a_value = a_value * torch([output_gnn1_a[i][next_step_gnn1[i]] for i in range(batch_size)])
+        pi_value = pi_value * torch([output_gnn1_pi[i][next_step_gnn1[i]] for i in range(batch_size)])
+        q_value = q_value * torch([output_gnn1_q[i][next_step_gnn1[i]] for i in range(batch_size)])
+
+        #check that next_step_gnn1 is not a stop node 
+        if next_step_gnn1 != dim_embedding -1:
+            # change which node is the one we are looking at
+            #idk if we change which node is on feature embedding finished here
+            pass
+        else :
+            #compute the gnn2 and apply softmax
+            output_gnn2_q = torch.softmax(model_q.GNN2(true_graphs,next_step_gnn1), dim = 1)
+            output_gnn2_a = torch.softmax(model_a.GNN2(true_graphs,next_step_gnn1),  dim = 1)
+            output_gnn2_pi = torch.softmax(model_pi.GNN2(true_graphs,next_step_gnn1), dim = 1)
+
+            #for each graph in the ouptut_gnn2_q we sample with a multinomial
+            next_step_gnn2 = torch.multinomial(output_gnn2_q, 1) #shape (batch_size, 1)
+
+            a_value = a_value * torch([output_gnn2_a[i][next_step_gnn2[i]] for i in range(batch_size)])
+            pi_value = pi_value * torch([output_gnn2_pi[i][next_step_gnn2[i]] for i in range(batch_size)])
+            q_value = q_value * torch([output_gnn2_q[i][next_step_gnn2[i]] for i in range(batch_size)])
+
+            true_graphs = append_node_link(true_graphs, next_step_gnn1, next_step_gnn2)
+            graph_for_gnn3 = encode_gnn3(true_graphs.deepcopy())
+            #this function also change who is the point of interest to switch to the latest added
+            
+            #compute the gnn3 and apply softmax to choose the neighbour
+            output_gnn3_q = torch.softmax(model_q.GNN3(graph_for_gnn3), dim = 1)
+            output_gnn3_a = torch.softmax(model_a.GNN3(graph_for_gnn3),  dim = 1)
+            output_gnn3_pi = torch.softmax(model_pi.GNN3(graph_for_gnn3), dim = 1)
+
+            #compute the softmax over the neighbor chosen to choose the kind of link
+
+            if next_step_gnn3 == 0 :#it is a stop,
+                #for the probability we compute it over all the node of the graph probability to stop
+                a_value
+            
+            else :
+                # multiply by two values, the one if the good neighbor is chosen and then if the good type of link 
+                pass
+
+                true_graphs = add_link_closness(true_graphs, node_linked,)
+    
+    #now we can compute the features of the final molecule
+    all_features_values = torch.zeros(batch_size, len(features)).to(device)
+    for i,fn in enumerate(features):
+        all_features_values[:,i] = compute_features(true_graphs, fn)
+
+    #exponents are the exponential of lambdas * all_features_values for each molecule
+    exponents = torch.exp(torch.matmul(all_features_values, lambdas), dim = 1) #check the dimension carefuly
+
+    return all_features_values, exponents, a_value, q_value, pi_value 
+
+
+
+class GDCTrainer_path():
     #implement a finetuning of our odel (which is concatenation of 3 GNN) with a Gradient distributional policy program
     def get_sampling_model(self):
         return self.ref_model
@@ -57,13 +101,15 @@ class GDCTrainer():
     def get_eval_model(self):
         return self.ref_model
     
-    def __init__(self, args, constraints, q_update_criterion, q_update_interval, sampling_function, lr = 1e-4, batch_size = 128, dpg_epochs =4):
+    def __init__(self, name_exp, features, desired_moments, q_update_criterion, q_update_interval, sampling_function, lr = 1e-4, batch_size = 128, dpg_epochs =4):
         # dpg_epochs is the number of optimization epochs per batch of samples
         self.sampling_function = sampling_function
-        self.constraints = constraints
+        self.features = features
 
-        self.lambdas = {k:0.0 for k in constraints}
+        self.lambdas = {k:0.0 for k in features}
         self.q_update_criterion = q_update_criterion
+        self.batch_size = batch_size
+        self.desired_moments = desired_moments
         assert self.q_update_criterion in ['interval', 'tvd', "kld"]
         # q_update_criterion can take one of the following values:
         # - 'interval': Update the GDP policy at regular intervals defined by q_update_interval.
@@ -72,9 +118,9 @@ class GDCTrainer():
         
 
         #to open
-        self.model = Models_GNN(args)
-        self.orig_model = copy.deepcopy(self.model)
-        self.ref_model = copy.deepcopy(self.model)
+        self.model = Models_GNN(name_exp) # it is pi
+        self.orig_model = copy.deepcopy(self.model) # it is a 
+        self.ref_model = copy.deepcopy(self.model) # it is q
         for p1, p2 in zip(self.ref_model.parameters(), self.orig_model.parameters()):
             p1.requires_grad= False
             p2.requires_grad= False
@@ -92,7 +138,7 @@ class GDCTrainer():
         self.compute_optimal_lambdas(sample_size=self.params["moment_matching_sample_size"])
 
 
-    def compute_optimal_lambdas(self, sample_size=4096, n_iters=1000, lr=.5):
+    def compute_optimal_lambdas(self, sample_size=4096, n_iters=1000, lr=.5): #how do they define the learning rate and sample size maybe do more
         """
         This performs the first step: Constraints --> EBM through self-normalized importance sampling. 
         Args:
@@ -104,52 +150,54 @@ class GDCTrainer():
 
         print("Computing Optimal Lambdas for desired moments...")
 
-        min_nabla_lambda = 0.01
+        min_nabla_lambda = 0.01 # difference betweeb the wanted mu and approximated mu 
         max_n_iters = n_iters
 
-        constraint_names = list(self.constraints.keys())
-        mu_star = self.desired_moments
+        feature_names = list(self.features.keys())
+        mu_star = self.desired_moments #name mu_bar in the pseudo code
 
-        mu_star = torch.tensor([mu_star[f] for f in constraint_names])
-        lambdas = torch.tensor([self.lambdas[f] for f in constraint_names])
+        mu_star = torch.tensor([mu_star[f] for f in feature_names])
+        lambdas = torch.tensor([self.lambdas[f] for f in feature_names])
 
         # Collect sample_size samples for this:
-        list_constraint_tensor = []
-        list_model_input = []
+        list_feature_tensor = []
         for i in  range(sample_size):
-            _, _, atom, mols_generated, all_constraints_values, exponents = self.sampling_function(self.get_sampling_model(),
-                    self.constraints,
-                    self.lambdas)
+            all_features_values, exponents, a_value, q_value, pi_value   = self.sampling_function(self.get_sampling_model(),
+                                                                                                self.get_eval_model(),
+                                                                                                self.get_policy_model(), 
+                                                                                                self.features, 
+                                                                                                self.lambdas,
+                                                                                                self.batch_size)
 
-            model_input = torch.cat((atom, mols_generated), axis=1)
-            constraint_tensor = torch.stack([all_constraints_values[k] for k in all_constraints_values], dim=1) # B x F
+            #model_input = torch.cat((atom, mols_generated), axis=1)
+            constraint_tensor = torch.stack([all_features_values[k] for k in all_features_values], dim=1) # B x F, du coup c'est censé etre batch_size x nb_features
+            
+            list_feature_tensor.append(constraint_tensor)
 
-            list_model_input.append(model_input)
-            list_constraint_tensor.append(constraint_tensor)
-
-        all_constraint_tensor = torch.cat(list_constraint_tensor, dim=0)  # [sample_sz x F]
+        all_constraint_tensor = torch.cat(list_feature_tensor, dim=0)  # [sample_sz x F]
 
         #### check for zero-occuring features. 
         # If a constraint has not occurred in your sample, no lambdas will be learned for that constraint, so we must check.
 
-        for i, constraint  in enumerate(constraint_names):
-            assert all_constraint_tensor[:, i].sum().item() > 0, "constraint {constraint} hasn't occurred in the samples, use a larger sample size"
+        for i, feature  in enumerate(feature_names):
+            assert all_constraint_tensor[:, i].sum().item() > 0, "constraint {feature} hasn't occurred in the samples, use a larger sample size"
 
-        for step in range(max_n_iters):
+        for step in range(max_n_iters): #SGD for finding lambdas
 
-            # 1. calculate P_over_q batch wise with current lambdas
+            # 1. calculate P_over_q batch wise with current lambdas which will be name w
             ## compute new exponents
-            list_P_over_q = []
-            for model_input, constraint_tensor in zip(list_model_input, list_constraint_tensor):
-                exponents = lambdas.to(constraint_tensor.get_device()).mul(constraint_tensor).sum(dim=1) # N  ## compute new exponents
-                P_over_q , _, _ ,_ = self.compute_rewards(exponents, model_input, mols_generated.shape[1]) # B TODO: use fbs for larger batches
-                list_P_over_q.append(P_over_q)
+            list_w = []
+            for feature_tensor in (list_feature_tensor):
+                exponents = lambdas.to(constraint_tensor.get_device()).mul(constraint_tensor).sum(dim=1) # N  ## compute new exponents, do scalar product
+                #w is equall to putting the exponents in one exponential 
+                w = torch.exp(exponents) # N
+                list_w.append(w)
 
-            P_over_q = torch.cat(list_P_over_q, dim=0)
+            w = torch.cat(w, dim=0)
 
             # 2. compute mu (mean) of features given the current lambda using SNIS
-            mu_lambda_numerator = P_over_q.view(1, -1).matmul(all_constraint_tensor ).squeeze(0) # F
-            mu_lambda_denominator = P_over_q.sum()
+            mu_lambda_numerator = w.view(1, -1).matmul(all_constraint_tensor ).squeeze(0) # F
+            mu_lambda_denominator = w.sum()
             mu_lambda = mu_lambda_numerator / mu_lambda_denominator # F
 
             # 3. Update current Lambdas
@@ -161,77 +209,15 @@ class GDCTrainer():
             print("\tμ: {}".format(mu_lambda))
             print("\tμ*: {}".format(mu_star))
 
-            for i, k in enumerate(constraint_names):
+            for i, k in enumerate(feature):
                 self.lambdas[k] = lambdas[i].item()
             
             ## Check if error is less than tolerance, then break.
             if err < min_nabla_lambda: 
                 break
-        
-    def compute_rewards(self, scores, model_input, gen_len):
-        """
-        Calculate P(x)/q(x) coefficient
-        P(x) = a(x).b(target|x) the energy function
-        a(x) = prob. of the sampled sequence by the original model (i.e. gpt-2 orig)
-        b(x) = the output of the classifier (scores)
-        q(x) = prob. of the sampled sequence by the reference/proposal policy.
-        """
-
-        # step1: calculate P(x) = a(x).b(target|x)
-        # calculate a(x)
-
-
-        orig_logits, _ , _ = self.orig_model(model_input)
-        orig_logprob = logprobs_from_logits(orig_logits[:,:-1,:], model_input[:, 1:])
-
-        # @todo: rethink if we should calculate log(a(x)) with or without the query
-        orig_logprob = orig_logprob[:, -gen_len:] # (might be not necesary) we only keep prob regardless of the query
-
-        # calculate b(x)
-        orig_logprob = orig_logprob.detach() # we don't backprob to original model
-        orig_logprob = torch.sum(orig_logprob, dim=-1) # log(a(x)) of shape [batchsize]
-
-        assert scores.shape == orig_logprob.shape
-
-        # we move all variables to the gpu of the policy to be trained "gpt2_device"
-        scores = scores.to(self.params["gpt2_ref_device"])
-        orig_logprob = orig_logprob.to(self.params["gpt2_ref_device"])
-
-
-        log_P = orig_logprob.detach() + scores.detach() # Log P(x) = Log a(x)* e^{scores} = Log a(x) + scores
-
-        # step2: calculate q(x)
-
-        model_input = model_input.to(self.params["gpt2_ref_device"])
-        ref_logits, _ , _ = self.ref_model(model_input)
-
-        #q_prob = probs_from_logits(ref_logits[:,:-1,:], model_input[:, 1:])
-        q_logprobs = logprobs_from_logits(ref_logits[:,:-1,:], model_input[:, 1:])
-        q_logprobs = q_logprobs[:, -gen_len:]
-        q_logprobs = q_logprobs.detach() # do not backpropagate to q(x)
-
-        q_logprobs = torch.sum(q_logprobs, dim=-1) # Log(q(x)) [Batch size]
-
-        # final reward = exp(Log(P(x)) - Log(q(x)))
-        P_over_q = torch.exp(log_P - q_logprobs)
-
-        return P_over_q, log_P, q_logprobs, orig_logprob  # P/q , P(x), q(x), a(x)
     
 
-    def loss(self, scores, query, response, model_input):
-        """
-        Calculates DPG loss on a given batch.
-        L = (a(x) b(target|x) / q(x)) log pi(x)
-        args:
-            q_logprobs (torch.tensor): tensor containing logprobs shape [batch_size, response_length]
-            response (torch.tensor): tensor containing response (continuation) token ids, shape [batch_size, response_length]
-            scores (torch.tensor): tensor containing b(x_1), b(x_2), .. shape [batch_size]
-        returns:
-            loss (torch.tensor) []: mean loss value across the batch
-            stats (dict) : training statistics
-        """
-
-    def step(self,query,reponse,score)
+    def step(self,query,reponse,number_samples):
         """
         This is the main training function. It runs a off-policy DPG (with proposal q) optimization step which includes :
         1. Sample continuations from proposal distribution q(x) which is self.ref_model 
@@ -245,5 +231,13 @@ class GDCTrainer():
         Returns:
             train_stats (dict): a summary of the training statistics for logging purposes.
         """
+
+        for k in range (number_samples):
+            pass
+   
+
+    def loss(self):
+        pass
+
 
         
