@@ -5,22 +5,64 @@ import sys
 import os
 import json
 import gc
-from path import Path
-
 
 cwd = os.getcwd()
 parent_dir = os.path.dirname(cwd)
-parent_parent_dir = os.path.dirname(parent_dir)
 sys.path.append(parent_dir)
-sys.path.append(parent_parent_dir)
 
-from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_passive_add_feature_GNN2, custom_collate_GNN2
-from Model.GNN2 import ModelWithEdgeFeatures, ModelWithNodeConcat
-from Model.GNN1 import ModelWithNodeConcat, ModelWithEdgeFeatures
-from Model.GNN3 import ModelWithgraph_embedding_modif
-from Model.metrics import pseudo_accuracy_metric, pseudo_recall_for_each_class, pseudo_precision_for_each_class
+from Model.GNN1 import ModelWithEdgeFeatures as GNN1
+from Model.GNN1 import ModelWithNodeConcat as GNN1_node_concat
+from Model.GNN2 import ModelWithEdgeFeatures as GNN2
+from Model.GNN2 import ModelWithNodeConcat as GNN2_node_concat
+from Model.GNN3 import ModelWithEdgeFeatures as GNN3
+from Model.GNN3 import ModelWithgraph_embedding_modif as GNN3_embedding
 
-from FinalPipeline.utils import get_model_GNN1, get_model_GNN2, get_model_GNN3, load_model
+
+def load_model(checkpoint_path, model):
+
+    checkpoint = torch.load(checkpoint_path)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    
+    return model
+
+def get_model_GNN1(config, encoding_size, edge_size):
+
+    return GNN1(in_channels=encoding_size + int(config['feature_position'] + int(len(config['score_list']))),
+                hidden_channels_list=config["GCN_size"],
+                mlp_hidden_channels=config['mlp_hidden'],
+                edge_channels=edge_size, 
+                num_classes=encoding_size, 
+                use_dropout=config['use_dropout'],
+                size_info=config['use_size'],
+                max_size=config['max_size'])
+
+def get_model_GNN2(config, encoding_size, edge_size):
+
+    return GNN2(in_channels=encoding_size + int(config['feature_position'] + int(len(config['score_list']))),
+                hidden_channels_list=config["GCN_size"],
+                mlp_hidden_channels=config['mlp_hidden'],
+                edge_channels=edge_size, 
+                num_classes=edge_size, 
+                size_info=config['use_size'],
+                max_size=config['max_size'],
+                use_dropout=config['use_dropout'])
+
+def get_model_GNN3(config, encoding_size, edge_size):
+
+    if config['graph_embedding']:
+        return GNN3_embedding(in_channels=encoding_size + int(config['feature_position'] + int(len(config['score_list']))),
+                    hidden_channels_list=config["GCN_size"],
+                    mlp_hidden_channels = config['mlp_hidden'],
+                    edge_channels=edge_size, 
+                    num_classes=edge_size,
+                    use_dropout=config['use_dropout'],
+                    size_info=config['use_size'],
+                    max_size=config['max_size'])
+
+    return GNN3(in_channels=encoding_size + int(config['feature_position'] + int(len(config['score_list']))),
+                hidden_channels_list=config["GCN_size"],
+                edge_channels=edge_size, 
+                use_dropout=config['use_dropout'])
 
 
 def load_best_models(path):
@@ -34,18 +76,29 @@ def load_best_models(path):
     return checkpoint_path
 
 
-class Models_GNN():
+class Model_GNNs():
 
-    def get_gnn1(self):
-        return self.GNN1
-    
-    def get_gnn2(self):
-        return self.GNN2
-    
-    def get_gnn3(self):
-        return self.GNN3
     def __init__(self,args):
+        """
+        Initialize the model
+        input:
+        args: arguments of the training, name of the experiment, training or not, encoding type, kekulization or not
+
+        return: None
+        """
         self.name = args.name_experiment
+        self.training = args.training
+
+        if args.encod == 'charged':
+            encoding_size = 13
+        elif args.encod == 'polymer':
+            encoding_size = 8
+        
+        if args.keku:
+            edge_size = 3
+        else:
+            edge_size = 4
+
         self.experiment_path = Path('..') / 'trained_models' / self.name
 
 
@@ -80,53 +133,26 @@ class Models_GNN():
 
         print(GNN1_path, GNN2_path, GNN3_path)
 
-        if args.encod == 'charged':
-            encoding_size = 13
-        elif args.encod == 'polymer':
-            encoding_size = 8
-        
-        if args.keku:
-            edge_size = 3
-            edge_mapping='kekulized'
-        else:
-            edge_size = 4
-            edge_mapping='aromatic'
+        GNN1_model = get_model_GNN1(config1, encoding_size, edge_size)
+        GNN2_model = get_model_GNN2(config2, encoding_size, edge_size)
+        GNN3_model = get_model_GNN3(config3, encoding_size, edge_size)
 
-        
-        self.encoding_size = encoding_size
-        self.edge_size = edge_size
-        self.encoding_type =args.encod
-        self.feature_position = config1["feature_position"]
-
-        self.score_list = config1["score_list"]
-        self.desired_score_list = args.desired_score_list
-
-
-        self.GNN1 = get_model_GNN1(config1, encoding_size, edge_size)
-        self.GNN2 = get_model_GNN2(config2, encoding_size, edge_size)
-        self.GNN3 = get_model_GNN3(config3, encoding_size, edge_size)
-
-        self.optimizer_GNN1 = torch.optim.Adam(self.GNN1.parameters(), lr=config1["lr"])
-        self.optimizer_GNN2 = torch.optim.Adam(self.GNN2.parameters(), lr=config2["lr"])
-        self.optimizer_GNN3 = torch.optim.Adam(self.GNN3.parameters(), lr=config3["lr"])
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.GNN1_model, self.optimizer_GNN1 = load_model(GNN1_path, self.GNN1, self.optimizer_GNN1)
-        self.GNN2_model, self.optimizer_GNN2 = load_model(GNN2_path, self.GNN2, self.optimizer_GNN2)
-        self.GNN3_model, self.optimizer_GNN3 = load_model(GNN3_path, self.GNN3, self.optimizer_GNN3)
+        self.GNN1 = load_model(GNN1_path, GNN1_model)
+        self.GNN2 = load_model(GNN2_path, GNN2_model)
+        self.GNN3 = load_model(GNN3_path, GNN3_model)
 
-        self.GNN1_model.to(self.device)
-        self.GNN2_model.to(self.device)
-        self.GNN3_model.to(self.device)
+        self.GNN1.to(self.device)
+        self.GNN2.to(self.device)
+        self.GNN3.to(self.device)
 
-        self.GNN1_model.eval()
-        self.GNN2_model.eval()
-        self.GNN3_model.eval()
-        
+        if self.training:
+            self.GNN1.train()
+            self.GNN2.train()
+            self.GNN3.train()
+        else:
+            self.GNN1.eval()
+            self.GNN2.eval()
+            self.GNN3.eval()
 
-    def forward(self, data):
-        data = data.to(self.device)
-        data = self.GNN1_model(data)
-        data = self.GNN2_model(data)
-        data = self.GNN3_model(data)
-        return data
