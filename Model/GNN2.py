@@ -86,7 +86,7 @@ class ModelWithEdgeFeatures(torch.nn.Module):
     
 
 class ModelWithNodeConcat(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels_list, mlp_hidden_channels, edge_channels, encoding_size, num_classes=4, use_dropout=True, use_batchnorm=True):
+    def __init__(self, in_channels, hidden_channels_list, mlp_hidden_channels, edge_channels, encoding_size, num_classes=4, use_dropout=True, use_batchnorm=True, size_info = True, max_size = 40):
         torch.manual_seed(12345)
         super(ModelWithNodeConcat, self).__init__()
 
@@ -94,6 +94,8 @@ class ModelWithNodeConcat(torch.nn.Module):
         self.use_batchnorm = use_batchnorm
         self.in_channels = in_channels
         self.encoding_size =  encoding_size
+        self.size_info = size_info
+        self.max_size = max_size
 
         self.message_passing_layers = torch.nn.ModuleList()
         self.batch_norm_layers = torch.nn.ModuleList()
@@ -130,6 +132,13 @@ class ModelWithNodeConcat(torch.nn.Module):
 
         # Aggregation function to obtain graph embedding
         x = global_add_pool(x, batch)
+        if self.size_info:
+            # Concatenate size of each graph of the batch 
+            num_nodes_per_graph = torch.bincount(data.batch).view(-1, 1).float()
+            # Normalize num_node 
+            num_nodes_per_graph = num_nodes_per_graph / self.max_size
+
+            x = torch.cat((x, num_nodes_per_graph), dim=1)
 
         node_embeddings = torch.cat(node_embeddings, dim=1)
         x = torch.cat((x, node_embeddings), dim=1)
