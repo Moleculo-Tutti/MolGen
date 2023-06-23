@@ -112,7 +112,10 @@ class ModelWithNodeConcat(torch.nn.Module):
         for dim in hidden_channels_list :
             dim_concat += dim
         
-        self.fc1 = torch.nn.Linear(hidden_channels_list[-1] + in_channels+ dim_concat, mlp_hidden_channels)
+        if self.size_info:
+            self.fc1 = torch.nn.Linear(hidden_channels_list[-1] + 1 + dim_concat + in_channels, mlp_hidden_channels)
+        else:
+            self.fc1 = torch.nn.Linear(hidden_channels_list[-1]+ dim_concat + in_channels, mlp_hidden_channels)
         self.fc2 = torch.nn.Linear(mlp_hidden_channels, num_classes)
 
     def forward(self, data):
