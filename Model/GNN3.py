@@ -168,6 +168,8 @@ class ModelWithgraph_embedding_close_or_not(torch.nn.Module):
     def forward(self, data):
         x, edge_index, edge_attr, batch, mask = data.x, data.edge_index, data.edge_attr, data.batch, data.mask
 
+        node_embeddings = []
+        specified_nodes = torch.nonzero(x[:,  self.encoding_size-1] == 1).squeeze()
         for message_passing_layer, batch_norm_layer in zip(self.message_passing_layers, self.batch_norm_layers):
             x = message_passing_layer(x, edge_index, edge_attr)
             if self.use_batchnorm:
@@ -177,6 +179,8 @@ class ModelWithgraph_embedding_close_or_not(torch.nn.Module):
             x = F.relu(x)
             if self.use_dropout:
                 x = F.dropout(x, training=self.training)
+            node_embedding = x[specified_nodes]
+            node_embeddings.append(node_embedding)
         
         x = global_add_pool(x, batch)
         
