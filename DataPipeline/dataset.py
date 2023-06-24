@@ -219,14 +219,14 @@ class ZincSubgraphDatasetStep(Dataset):
             node_features_label[:, -1] = 1
 
             if len(terminal_nodes[1][id_chosen][3]) != 0:
-                closed_cycle = torch.tensor(1).unsqueeze(0)
+                closed_cycle = torch.tensor(1.).unsqueeze(0)
                 for cycle_neighbor in terminal_nodes[1][id_chosen][3]:
                     node_features_label[id_map[cycle_neighbor[0]]][:self.edge_size - 1] = cycle_neighbor[1][:self.edge_size - 1]
                     node_features_label[id_map[cycle_neighbor[0]]][-1] = 0
 
             
             else:
-                closed_cycle = torch.tensor(0).unsqueeze(0)
+                closed_cycle = torch.tensor(0.).unsqueeze(0)
 
             mask = torch.cat((torch.zeros(node1 + 1), torch.ones(len(subgraph.x) - node1 - 1)), dim=0).bool()
             mask[-1] = False
