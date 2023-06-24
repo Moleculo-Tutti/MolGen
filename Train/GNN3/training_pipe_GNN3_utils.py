@@ -282,7 +282,7 @@ class TrainGNN3():
         self.continue_training = continue_training
 
         print(f"Loading data...")
-        self.loader_train, self.loader_val, self.model, self.encoding_size, self.edge_size,self_model2 = self.load_data_model()
+        self.loader_train, self.loader_val, self.model, self.encoding_size, self.edge_size,self.model2 = self.load_data_model()
         print(f"Data loaded")
         self.begin_epoch = 0
 
@@ -465,12 +465,19 @@ class TrainGNN3():
                 self.eval_history.loc[epoch] = [epoch, None, None, None, None, None, None, None, None, None]
 
             if save_epoch:
-                checkpoint = {
+                if self.split_two_parts:
+                    checkpoint = {
+                    'epoch': epoch,
+                    'model_state_dict': self.model.state_dict(),
+                    'model2_state_dict': self.model2.state_dict(),
+                    'optimizer_state_dict': self.optimizer.state_dict()}
+                else:
+                    checkpoint = {
                     'epoch': epoch,
                     'model_state_dict': self.model.state_dict(),
                     'optimizer_state_dict': self.optimizer.state_dict(),
                     # Add any other relevant information you want to save here
-                }
+                    }
                 epoch_save_file = os.path.join(self.directory_path_epochs, f'checkpoint_{index_max}.pt')
                 torch.save(checkpoint, epoch_save_file)
 
