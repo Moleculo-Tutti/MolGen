@@ -1,5 +1,5 @@
 {
-    "name": "GNN3_split_two_without_node_embedding",
+    "name": "GNN3_split_two_with_node_embedding",
     "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_charged_kekulized_scores.pt",
     "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_charged_kekulized_scores.pt",
     "n_epochs": 3000,
@@ -12,7 +12,7 @@
     "lr": 0.0001,
     "print_bar": false,
     "split_two_parts" : true,
-    "node_embedding_for_second_part" : false,
+    "node_embedding_for_second_part" : true,
     "every_epoch_save" : 50,
     "every_epoch_metric" : 50,
     "val_metric_size" : 20,
