@@ -468,12 +468,15 @@ class TrainGNN3():
                 loss, _, _, _, _, _, _, _, _ = train_one_epoch(
                     loader=self.loader_train,
                     model=self.model,
+                    split_two_parts=self.split_two_parts,
                     size_edge=self.edge_size,
                     device=self.device,
                     optimizer=self.optimizer,
                     epoch_metric = False,
                     criterion=self.criterion,
-                    print_bar = self.print_bar)
+                    print_bar = self.print_bar,
+                    model2 = self.model2,
+                    criterion2=self.criterion2)
                 
                 self.training_history.loc[epoch] = [epoch, loss, None, None, None, None, None, None, None, None]
                 self.eval_history.loc[epoch] = [epoch, None, None, None, None, None, None, None, None, None]
