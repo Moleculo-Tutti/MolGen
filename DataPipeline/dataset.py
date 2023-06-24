@@ -219,14 +219,14 @@ class ZincSubgraphDatasetStep(Dataset):
             node_features_label[:, -1] = 1
 
             if len(terminal_nodes[1][id_chosen][3]) != 0:
-                closed_cycle = 1
+                closed_cycle = torch.tensor(1)
                 for cycle_neighbor in terminal_nodes[1][id_chosen][3]:
                     node_features_label[id_map[cycle_neighbor[0]]][:self.edge_size - 1] = cycle_neighbor[1][:self.edge_size - 1]
                     node_features_label[id_map[cycle_neighbor[0]]][-1] = 0
 
             
             else:
-                closed_cycle = 0
+                closed_cycle = torch.tensor(1)
 
             mask = torch.cat((torch.zeros(node1 + 1), torch.ones(len(subgraph.x) - node1 - 1)), dim=0).bool()
             mask[-1] = False
@@ -343,7 +343,7 @@ def custom_collate_GNN3_bis(batch):
     sg_data_batch = Batch.from_data_list(sg_data_list)
     cycle_label_tensor = torch.cat(cycle_label_list, dim=0)
     mask_tensor = torch.cat(mask_list, dim=0)
-    close_cycle_tensor = torch(close_cycle_list, dim=0)
+    close_cycle_tensor = torch.cat(close_cycle_list, dim=0)
 
     del cycle_label_list, mask_list, sg_data_list, batch, close_cycle_list
     
