@@ -192,6 +192,69 @@ class ZincSubgraphDatasetStep(Dataset):
             subgraph.mask = mask
             # Clean the memory 
             del node_features_label, mask, neighbor, edge_neighbor_attr, add_edge_index, node1, node2, id_chosen, terminal_nodes, preprocessed_graph
+        
+        if self.GNN_type == 3.5:
+            id_chosen = np.random.randint(len(terminal_nodes[1])) #we sample a random neighbor
+            neighbor = terminal_nodes[1][id_chosen][1]
+
+            # Put a one to indicate the last node generated before adding it to the graph
+            neighbor[-1] = 1
+            edge_neighbor_attr = terminal_nodes[1][id_chosen][2] # we get the attribute of the edge
+
+            #add neighbor and edge_neighbor to the graph
+            subgraph.x = torch.cat([subgraph.x, neighbor.unsqueeze(0)], dim=0)
+
+            node1 = id_map[terminal_nodes[0]]
+            node2 = len(subgraph.x) - 1
+
+            add_edge_index = torch.tensor([[node1, node2], [node2, node1]], dtype=torch.long)
+            subgraph.edge_index = torch.cat([subgraph.edge_index, add_edge_index], dim=1)
+            # add double edge_attribute 
+            subgraph.edge_attr = torch.cat([subgraph.edge_attr, edge_neighbor_attr.unsqueeze(0), edge_neighbor_attr.unsqueeze(0)], dim=0)
+
+
+            node_features_label = torch.zeros(len(subgraph.x), self.edge_size) #there is no triple bond for closing the cycle
+
+            # put ones in the last column of the node_features_label for the terminal node (put stop everywhere)
+            node_features_label[:, -1] = 1
+
+            if len(terminal_nodes[1][id_chosen][3]) != 0:
+                closed_cycle = 1
+                for cycle_neighbor in terminal_nodes[1][id_chosen][3]:
+                    node_features_label[id_map[cycle_neighbor[0]]][:self.edge_size - 1] = cycle_neighbor[1][:self.edge_size - 1]
+                    node_features_label[id_map[cycle_neighbor[0]]][-1] = 0
+
+            
+            else:
+                closed_cycle = 0
+
+            mask = torch.cat((torch.zeros(node1 + 1), torch.ones(len(subgraph.x) - node1 - 1)), dim=0).bool()
+            mask[-1] = False
+
+            if self.feature_position:
+                #Concatenate the mask to the node_features_label
+                opposite_mask = torch.logical_not(mask)
+                opposite_mask[-1] = False
+                opposite_mask[node1] = False
+                # we add the opposite of the mask to the node features that correspond to the feature_position
+                subgraph.x = torch.cat((subgraph.x, opposite_mask.unsqueeze(1)), dim=1) 
+                del opposite_mask
+
+            if self.scores_list != []:
+                # Concat the scores to the node features
+                for score_name in self.scores_list:
+                    score_tensor = torch.tensor(preprocessed_graph[score_name], dtype=torch.float32)
+                    # Duplicate the score tensor to match the number of nodes in the subgraph
+                    score_tensor = score_tensor.repeat(subgraph.x.size(0), 1)
+                    subgraph.x = torch.cat([subgraph.x, score_tensor], dim=-1)
+            
+
+            subgraph.cycle_label = node_features_label
+            subgraph.mask = mask
+            subgraph.close_cycle = closed_cycle
+            # Clean the memory 
+            del node_features_label, mask, neighbor, edge_neighbor_attr, add_edge_index, node1, node2, id_chosen, terminal_nodes, preprocessed_graph
+        
 
         return subgraph
     
@@ -269,6 +332,22 @@ def custom_collate_GNN3(batch):
     del cycle_label_list, mask_list, sg_data_list, batch
     
     return sg_data_batch, cycle_label_tensor, mask_tensor
+
+def custom_collate_GNN3_bis(batch):
+
+    sg_data_list = [item for item in batch]
+    cycle_label_list = [item.cycle_label for item in batch]
+    mask_list = [item.mask for item in batch]
+    close_cycle_list = [item.close_cycle for item in batch]
+
+    sg_data_batch = Batch.from_data_list(sg_data_list)
+    cycle_label_tensor = torch.cat(cycle_label_list, dim=0)
+    mask_tensor = torch.cat(mask_list, dim=0)
+    close_cycle_tensor = torch.cat(close_cycle_list, dim=0)
+
+    del cycle_label_list, mask_list, sg_data_list, batch, close_cycle_list
+    
+    return sg_data_batch, cycle_label_tensor, mask_tensor, close_cycle_tensor
 
 
 

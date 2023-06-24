@@ -32,13 +32,15 @@ parent_parent_dir = os.path.dirname(parent_dir)
 sys.path.append(parent_dir)
 sys.path.append(parent_parent_dir)
 
-from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_GNN3
-from Model.GNN3 import ModelWithEdgeFeatures, ModelWithgraph_embedding_modif
+from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_GNN3, custom_collate_GNN3_bis
+from Model.GNN3 import ModelWithEdgeFeatures, ModelWithgraph_embedding_modif, ModelWithgraph_embedding_close_or_not
 from Model.metrics import  pseudo_accuracy_metric_gnn3
 
 
-def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoch_metric, print_bar = False):
+def train_one_epoch(loader, model, split_two_parts, size_edge, device, optimizer, criterion, epoch_metric, print_bar = False, model2 = None, criterion2 = None):
     model.train()
+    if split_two_parts:
+        model2.train()
     total_loss = 0
     num_correct = 0
     num_output = torch.zeros(size_edge)  # Already on CPU
@@ -62,10 +64,23 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoc
         mask = batch[2].to(device)
         
         optimizer.zero_grad()
+        
+
+        if split_two_parts:
+            supposed_close = batch[3].to(device) #vaut 1 si on ferme un cycle et 0 sinon
+            close = model2(data)
+            close_softmaxed = F.softmax(close, dim=1)
+            loss2 = criterion2(close_softmaxed, supposed_close)
+            loss2.backward()
+            
+            #we combine the mask with the supposed_close, if a graph is supposed_closed all these nodes are added to the mask
+            supposed_close_extended = supposed_close.repeat_interleave(torch.bincount(data.batch))
+            mask = torch.logical_and(mask, supposed_close_extended)
+
+        
         out = model(data)
 
         # Convert node_labels to class indices
-        
         node_labels = node_labels.to(device)
         mask = mask.to(device)
 
@@ -76,7 +91,10 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoc
         loss.backward()
         optimizer.step()
 
-        total_loss += loss.item() * data.num_graphs
+        if split_two_parts:
+            total_loss += loss.item() * data.num_graphs + loss2.item() * data.num_graphs
+        else:
+            total_loss += loss.item() * data.num_graphs
         # Add softmax to out
         softmax_out = F.softmax(out, dim=1)
 
@@ -119,6 +137,8 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoc
                 pseudo_recall_placed = global_well_placed_cycles/global_num_wanted_cycles, pseudo_recall_type = global_well_type_cycles/global_num_wanted_cycles, 
                 conditional_precision_placed = conditional_precision_placed, f1_score = f1_score)
     del data, node_labels, mask, out, softmax_out, loss
+    if split_two_parts:
+        del supposed_close_extended, supposed_close, close, loss2, close_softmaxed
     if epoch_metric:
         return (
             total_loss / len(loader.dataset),
@@ -136,8 +156,10 @@ def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoc
         return total_loss / len(loader.dataset), None, None, None, None, None, None, None, None
 
 
-def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False, val_metric_size=1):
+def eval_one_epoch(loader, model,split_two_parts, size_edge, device, criterion, print_bar=False, val_metric_size=1, model2=None, criterion2 = None):
     model.eval()
+    if split_two_parts:
+        model2.eval()
     total_loss = 0
     num_correct = 0
     num_output = torch.zeros(size_edge)  # Already on CPU
@@ -163,6 +185,19 @@ def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False,
                 node_labels = batch[1].to(device)
                 mask = batch[2].to(device)
 
+
+                if split_two_parts:
+                    supposed_close = batch[3].to(device)
+                    close = model2(data)
+                    close_softmaxed = F.softmax(close, dim=1)
+                    loss2 = criterion2(close_softmaxed, supposed_close)
+                    loss2.backward()
+            
+                    #we combine the mask with the supposed_close, if a graph is supposed_closed all these nodes are added to the mask
+                    supposed_close_extended = supposed_close.repeat_interleave(torch.bincount(data.batch))
+                    mask = torch.logical_and(mask, supposed_close_extended)
+                    
+
                 out = model(data)
 
                 node_labels = node_labels.to(device)
@@ -185,9 +220,14 @@ def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False,
                 global_cycles_shouldnt_created += cycles_shouldnt_created
                 global_num_wanted_cycles += num_wanted_cycles
 
-                total_loss += loss.item() * data.num_graphs
+                if split_two_parts:
+                    total_loss += (loss.item() + loss2.item()) * data.num_graphs
+                else:
+                    total_loss += loss.item() * data.num_graphs
                 total_graphs_processed += data.num_graphs
     del loss, data, node_labels, mask, out
+    if split_two_parts:
+        del supposed_close_extended, supposed_close, close, close_softmaxed, loss2
 
     denominator = global_cycles_created + global_cycles_shouldnt_created + global_num_wanted_cycles
     if denominator == 0:
@@ -237,11 +277,12 @@ class TrainGNN3():
         self.size_info = config['use_size']
         self.score_list = config['score_list']
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.split_two_parts = config['split_two_parts']
         print(f"Training on {self.device}")
         self.continue_training = continue_training
 
         print(f"Loading data...")
-        self.loader_train, self.loader_val, self.model, self.encoding_size, self.edge_size = self.load_data_model()
+        self.loader_train, self.loader_val, self.model, self.encoding_size, self.edge_size,self_model2 = self.load_data_model()
         print(f"Data loaded")
         self.begin_epoch = 0
 
@@ -252,6 +293,9 @@ class TrainGNN3():
             self.begin_epoch = checkpoint['epoch']
 
         self.criterion = nn.CrossEntropyLoss()
+        self.criterion2 = None
+        if self.split_two_parts:
+            self.criterion2 = nn.BCELoss()
 
         self.training_history = pd.DataFrame(columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector','pseudo_precision', 'pseudo_recall' , 'pseudo_recall_placed', 'pseudo_recall_type','conditionnal_precision_placed', 'f1_score'])
         self.eval_history = pd.DataFrame(columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector','pseudo_precision', 'pseudo_recall' , 'pseudo_recall_placed', 'pseudo_recall_type','conditionnal_precision_placed', 'f1_score'])
@@ -272,26 +316,57 @@ class TrainGNN3():
 
     def load_data_model(self):
         # Load the data
-        dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=3, feature_position=self.feature_position, scores_list=self.score_list)
-        dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=3, feature_position=self.feature_position, scores_list=self.score_list)
+        if self.split_two_parts:
+            dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=3.5, feature_position=self.feature_position, scores_list=self.score_list)
+            dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=3.5, feature_position=self.feature_position, scores_list=self.score_list)
+
+            loader_train = DataLoader(dataset_train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers, collate_fn=custom_collate_GNN3_bis)
+            loader_val = DataLoader(dataset_val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers, collate_fn=custom_collate_GNN3_bis)
+        else :
+            dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=3, feature_position=self.feature_position, scores_list=self.score_list)
+            dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=3, feature_position=self.feature_position, scores_list=self.score_list)
         
-        loader_train = DataLoader(dataset_train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers, collate_fn=custom_collate_GNN3)
-        loader_val = DataLoader(dataset_val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers, collate_fn=custom_collate_GNN3)
+            loader_train = DataLoader(dataset_train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers, collate_fn=custom_collate_GNN3)
+            loader_val = DataLoader(dataset_val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers, collate_fn=custom_collate_GNN3)
 
         encoding_size = dataset_train.encoding_size
         edge_size = dataset_train.edge_size
 
-        
+        model2 = None
         # Load the model
         if self.graph_embedding:
-            model = ModelWithgraph_embedding_modif(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
+            
+            if self.split_two_parts: 
+                model2 = ModelWithgraph_embedding_close_or_not(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
                                                 hidden_channels_list=self.GCN_size,
                                                 mlp_hidden_channels=self.mlp_hidden,
-                                                edge_channels=edge_size, 
-                                                num_classes=edge_size,
+                                                edge_channels=edge_size,
+                                                num_classes=1, #0 if we want to close nothing and 1 if  we close one cycle in the graph
                                                 use_dropout=self.use_dropout,
                                                 size_info=self.size_info,
                                                 max_size=self.max_size)
+                model2 = model2.to(self.device)
+                model = ModelWithgraph_embedding_modif(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
+                                                hidden_channels_list=self.GCN_size,
+                                                mlp_hidden_channels=self.mlp_hidden,
+                                                edge_channels=edge_size, 
+                                                num_classes=edge_size , #close with a simple double or can choose to not close with for a particular neihbor 
+                                                use_dropout=self.use_dropout,
+                                                size_info=self.size_info,
+                                                max_size=self.max_size)
+                
+            else :
+                model = ModelWithgraph_embedding_modif(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
+                                                hidden_channels_list=self.GCN_size,
+                                                mlp_hidden_channels=self.mlp_hidden,
+                                                edge_channels=edge_size, 
+                                                num_classes=edge_size, #close with a simple double or choose to not close
+                                                use_dropout=self.use_dropout,
+                                                size_info=self.size_info,
+                                                max_size=self.max_size)
+
+
+                
         else:
             model = ModelWithEdgeFeatures(in_channels=encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
                                         hidden_channels_list=self.GCN_size,
@@ -302,7 +377,7 @@ class TrainGNN3():
                                         max_size=self.max_size)
 
         
-        return loader_train, loader_val, model.to(self.device), encoding_size, edge_size
+        return loader_train, loader_val, model.to(self.device), encoding_size, edge_size, model2
     
     def prepare_saving(self):
         self.directory_path_experience = os.path.join("./experiments", self.name)
@@ -341,23 +416,29 @@ class TrainGNN3():
                 loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score = train_one_epoch(
                     loader=self.loader_train,
                     model=self.model,
+                    split_two_parts=self.split_two_parts,
                     size_edge=self.edge_size,
                     device=self.device,
                     optimizer=self.optimizer,
                     epoch_metric = True,
                     criterion=self.criterion,
-                    print_bar = self.print_bar)
+                    print_bar = self.print_bar,
+                    model2 = self.model2,
+                    criterion2=self.criterion2)
                 
                 self.training_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score]
 
                 loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score = eval_one_epoch(
                     loader=self.loader_val,
                     model=self.model,
+                    split_two_parts=self.split_two_parts,
                     size_edge=self.edge_size,
                     device=self.device,
                     criterion=self.criterion,
                     print_bar = self.print_bar,
-                    val_metric_size = self.val_metric_size)
+                    val_metric_size = self.val_metric_size,
+                    model2 = self.model2,
+                    criterion2=self.criterion2)
                 
                 self.eval_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score]
                 

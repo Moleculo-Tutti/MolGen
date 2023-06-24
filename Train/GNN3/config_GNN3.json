@@ -11,6 +11,7 @@
     "use_dropout": false,
     "lr": 0.0001,
     "print_bar": false,
+    "split_two_parts" : true,
     "every_epoch_save" : 50,
     "every_epoch_metric" : 50,
     "val_metric_size" : 20,
