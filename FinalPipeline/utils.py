@@ -246,7 +246,7 @@ def add_score_features(subgraph, scores_list, desired_scores_list, GNN_type = 1)
 
 
 class MolGen():
-    def __init__(self, GNN1, GNN2, GNN3, encoding_size, edge_size, feature_position, device, save_intermidiate_states = False, encoding_option = 'charged', score_list = [], desired_score_list = []):
+    def __init__(self, GNN1, GNN2, GNN3, encoding_size, edge_size, feature_position, device, save_intermidiate_states = False, encoding_option = 'charged', score_list = [], desired_score_list = [], store_scores_3 = False):
         mol_graph = create_torch_graph_from_one_atom(sample_first_atom(encoding_option), edge_size=edge_size, encoding_option=encoding_option)
         self.mol_graph = torch_geometric.data.Batch.from_data_list([mol_graph])
         self.queue = [0]
@@ -263,6 +263,10 @@ class MolGen():
 
         self.score_list = score_list
         self.desired_score_list = desired_score_list
+        self.store_scores_3 = store_scores_3
+        if self.store_scores_3:
+            self.counting_scores_3 = 0
+            self.counting_total = 0
 
     def one_step(self):
         with torch.no_grad():
@@ -352,6 +356,14 @@ class MolGen():
                 self.mol_graph = new_graph
                 return
 
+            if self.store_scores_3 and mask.size(0) > 1:
+                # Compute the sum of the two first columns in softmax_prediction3
+                sum_first_two_columns = softmax_prediction3[:, 0] + softmax_prediction3[:, 1]
+                # Add +1 if there is two scores between 
+                if (torch.sum(sum_first_two_columns > 0.5) > 1).item() == 1:
+                    print(sum_first_two_columns)
+                self.counting_scores_3 += (torch.sum(sum_first_two_columns > 0.5) > 1).item()
+                self.counting_total += 1
             selected_edge_distribution, max_index = select_node(softmax_prediction3, edge_size=self.edge_size)
 
              #sample edge
@@ -444,20 +456,25 @@ class GenerationModule():
                      save_intermidiate_states=self.checking_mode,
                      encoding_option=self.encoding_type,
                      score_list=self.score_list,
-                     desired_score_list=self.desired_score_list)
+                     desired_score_list=self.desired_score_list,
+                     store_scores_3 = True)
         mol.full_generation()
         if self.checking_mode:
             # check validity of the molecule
             if not mol.is_valid():
                 self.non_valid_molecules.append(mol.intermidiate_states)
-        return mol.mol_graph
+        return mol.mol_graph, mol.counting_scores_3, mol.counting_total
 
     def generate_mol_list(self, n_mol, n_threads=1):
         mol_list = []
+        counting_scores_3_total = 0
+        counting_total_total = 0
         if n_threads == 1:
             for i in tqdm(range(n_mol), desc="Generating molecules"):
-                mol_graph = self.generate_single_molecule()
+                mol_graph, counting_scores_3, counting_total = self.generate_single_molecule()
                 mol_list.append(mol_graph)
+                counting_scores_3_total += counting_scores_3
+                counting_total_total += counting_total
         else:
 
             # Utilize ThreadPoolExecutor to parallelize the task
@@ -469,6 +486,6 @@ class GenerationModule():
                 for future in tqdm(as_completed(future_to_mol), total=n_mol, desc="Generating molecules"):
                     mol_graph = future.result()
                     mol_list.append(mol_graph)
-                    
+        print("Average score 3: ", counting_scores_3_total / counting_total_total)           
         return mol_list
 

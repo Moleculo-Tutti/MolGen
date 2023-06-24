@@ -341,16 +341,10 @@ class TrainGNN1():
                 torch.save(checkpoint, epoch_save_file)
 
                 training_csv_directory = os.path.join(self.directory_path_experience, 'training_history.csv')
-                if os.path.exists(training_csv_directory):
-                    self.training_history.to_csv(training_csv_directory, mode='a', header=False)
-                else:
-                    self.training_history.to_csv(training_csv_directory)   
+                self.training_history.to_csv(training_csv_directory)   
 
                 eval_csv_directory = os.path.join(self.directory_path_experience, 'eval_history.csv')    
-                if os.path.exists(eval_csv_directory):
-                    self.eval_history.to_csv(eval_csv_directory, mode='a', header=False)
-                else:
-                    self.eval_history.to_csv(eval_csv_directory)
+                self.eval_history.to_csv(eval_csv_directory)
 
                 # Create a txt file containing the infos about the six best epochs saved 
                 six_best_epochs_file = os.path.join(self.directory_path_experience, 'six_best_epochs.txt')
