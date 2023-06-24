@@ -158,10 +158,14 @@ class ModelWithgraph_embedding_close_or_not(torch.nn.Module):
             if self.use_batchnorm:
                 self.batch_norm_layers.append(torch.nn.BatchNorm1d(hidden_channels))
             prev_channels = hidden_channels
+
+        dim_concat = 0
+        for dim in hidden_channels_list :
+            dim_concat += dim
         if self.size_info:
-            self.fc1 = torch.nn.Linear(hidden_channels_list[-1]*2 + 1, mlp_hidden_channels)
+            self.fc1 = torch.nn.Linear(hidden_channels_list[-1]*2 + 1 + dim_concat, mlp_hidden_channels)
         else:
-            self.fc1 = torch.nn.Linear(hidden_channels_list[-1]*2, mlp_hidden_channels)
+            self.fc1 = torch.nn.Linear(hidden_channels_list[-1]*2+ dim_concat, mlp_hidden_channels)
         self.fc2 = torch.nn.Linear(mlp_hidden_channels, self.num_classes)
         
 
