@@ -184,7 +184,7 @@ class ModelWithgraph_embedding_close_or_not(torch.nn.Module):
             # Concatenate size of each graph of the batch 
             num_nodes_per_graph = torch.bincount(data.batch).view(-1, 1).float()
             # Normalize num_node 
-            num_nodes_per_graph = num_nodes_per_graph / self.size_max
+            num_nodes_per_graph = num_nodes_per_graph / self.max_size
 
             x = torch.cat((x, num_nodes_per_graph), dim=1)
 
