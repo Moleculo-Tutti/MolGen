@@ -139,7 +139,7 @@ class ModelWithgraph_embedding_modif(torch.nn.Module):
 class ModelWithgraph_embedding_close_or_not(torch.nn.Module):
     def __init__(self, in_channels, hidden_channels_list, mlp_hidden_channels,edge_channels, num_classes, use_dropout=True, use_batchnorm=True, size_info = False, max_size = 40):
         torch.manual_seed(12345)
-        super(ModelWithgraph_embedding_modif, self).__init__()
+        super(ModelWithgraph_embedding_close_or_not, self).__init__()
 
         self.use_dropout = use_dropout
         self.use_batchnorm = use_batchnorm
