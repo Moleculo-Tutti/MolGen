@@ -70,6 +70,7 @@ def train_one_epoch(loader, model, split_two_parts, size_edge, device, optimizer
             supposed_close = batch[3].to(device) #vaut 1 si on ferme un cycle et 0 sinon
             close = model2(data)
             close_softmaxed = F.softmax(close, dim=1)
+            print(close_softmaxed.shape, supposed_close.shape)
             loss2 = criterion2(close_softmaxed, supposed_close)
             loss2.backward()
             
