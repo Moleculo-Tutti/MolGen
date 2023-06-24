@@ -33,7 +33,7 @@ sys.path.append(parent_dir)
 sys.path.append(parent_parent_dir)
 
 from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_GNN3, custom_collate_GNN3_bis
-from Model.GNN3 import ModelWithEdgeFeatures, ModelWithgraph_embedding_modif, ModelWithgraph_embedding_close_or_not
+from Model.GNN3 import ModelWithEdgeFeatures, ModelWithgraph_embedding_modif, ModelWithgraph_embedding_close_or_not_with_node_embedding, ModelWithgraph_embedding_close_or_not_without_node_embedding
 from Model.metrics import  pseudo_accuracy_metric_gnn3
 
 
@@ -193,7 +193,6 @@ def eval_one_epoch(loader, model,split_two_parts, size_edge, device, criterion, 
                     close_softmaxed = F.softmax(close, dim=1)
                     supposed_close = supposed_close.unsqueeze(1)
                     loss2 = criterion2(close_softmaxed, supposed_close)
-                    loss2.backward()
             
                     #we combine the mask with the supposed_close, if a graph is supposed_closed all these nodes are added to the mask
                     supposed_close_extended = supposed_close.repeat_interleave(torch.bincount(data.batch))
@@ -280,6 +279,7 @@ class TrainGNN3():
         self.score_list = config['score_list']
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.split_two_parts = config['split_two_parts']
+        self.node_embedding_for_second_part = config['node_embedding_for_second_part']
         print(f"Training on {self.device}")
         self.continue_training = continue_training
 
@@ -339,7 +339,18 @@ class TrainGNN3():
         if self.graph_embedding:
             
             if self.split_two_parts: 
-                model2 = ModelWithgraph_embedding_close_or_not(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
+                if self.node_embedding_for_second_part:
+                    model2 = ModelWithgraph_embedding_close_or_not_with_node_embedding(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
+                                                hidden_channels_list=self.GCN_size,
+                                                mlp_hidden_channels=self.mlp_hidden,
+                                                edge_channels=edge_size,
+                                                num_classes=1, #0 if we want to close nothing and 1 if  we close one cycle in the graph
+                                                use_dropout=self.use_dropout,
+                                                size_info=self.size_info,
+                                                max_size=self.max_size,
+                                                encoding_size=encoding_size)
+                else :
+                    model2 =ModelWithgraph_embedding_close_or_not_without_node_embedding(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
                                                 hidden_channels_list=self.GCN_size,
                                                 mlp_hidden_channels=self.mlp_hidden,
                                                 edge_channels=edge_size,
