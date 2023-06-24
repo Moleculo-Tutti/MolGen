@@ -343,7 +343,7 @@ def custom_collate_GNN3_bis(batch):
     sg_data_batch = Batch.from_data_list(sg_data_list)
     cycle_label_tensor = torch.cat(cycle_label_list, dim=0)
     mask_tensor = torch.cat(mask_list, dim=0)
-    close_cycle_tensor = torch.cat(close_cycle_list, dim=0)
+    close_cycle_tensor = torch(close_cycle_list, dim=0)
 
     del cycle_label_list, mask_list, sg_data_list, batch, close_cycle_list
     
