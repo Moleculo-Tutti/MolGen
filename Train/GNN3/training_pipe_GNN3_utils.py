@@ -344,7 +344,8 @@ class TrainGNN3():
                                                 num_classes=1, #0 if we want to close nothing and 1 if  we close one cycle in the graph
                                                 use_dropout=self.use_dropout,
                                                 size_info=self.size_info,
-                                                max_size=self.max_size)
+                                                max_size=self.max_size,
+                                                encoding_size=encoding_size)
                 model2 = model2.to(self.device)
                 model = ModelWithgraph_embedding_modif(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
                                                 hidden_channels_list=self.GCN_size,
