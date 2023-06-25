@@ -1,4 +1,5 @@
 from training_pipe_GNN3_utils import TrainGNN3
+from training_pipe_GNN3_bis_utils import TrainGNN3_bis
 from pathlib import Path
 import argparse
 import torch
@@ -18,8 +19,12 @@ def main(args):
     # Call the train_GNN3 function with the provided arguments
     mp.set_sharing_strategy('file_system') # Can cause memory leak
 
-    TrainingGNN3 = TrainGNN3(config)
-    TrainingGNN3.train()
+    if config['split_two_parts']:
+        TrainingGNN3_bis = TrainGNN3_bis(config)
+        TrainingGNN3_bis.train()
+    else:
+        TrainingGNN3 = TrainGNN3(config)
+        TrainingGNN3.train()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
