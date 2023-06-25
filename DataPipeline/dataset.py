@@ -136,7 +136,7 @@ class ZincSubgraphDatasetStep(Dataset):
                     subgraph.neighbor = torch.cat([subgraph.neighbor, torch.zeros(score_tensor.size(1))], dim=0)
                     
 
-        if self.GNN_type == 3:
+        if self.GNN_type == 3 or self.GNN_type == 4:
 
             id_chosen = np.random.randint(len(terminal_nodes[1])) #we sample a random neighbor
             neighbor = terminal_nodes[1][id_chosen][1]
@@ -193,7 +193,7 @@ class ZincSubgraphDatasetStep(Dataset):
             # Clean the memory 
             del node_features_label, mask, neighbor, edge_neighbor_attr, add_edge_index, node1, node2, id_chosen, terminal_nodes, preprocessed_graph
         
-        if self.GNN_type == 3.5:
+        if self.GNN_type == 4:
             id_chosen = np.random.randint(len(terminal_nodes[1])) #we sample a random neighbor
             neighbor = terminal_nodes[1][id_chosen][1]
 

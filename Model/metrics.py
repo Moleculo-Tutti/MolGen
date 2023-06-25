@@ -91,7 +91,6 @@ def pseudo_accuracy_metric_gnn3(model_input, model_output, target, mask, edge_si
         has_cycle = False
         # Set the new feature to 1 for nodes before the 'current_atom
     
-    # Garbage collection
     return cycles_created , good_cycles_created , good_types_cycles_predicted , cycles_not_created , cycles_shouldnt_created, num_wanted_cycles
 
 def pseudo_recall_for_each_class(model_output, target, random = False):
