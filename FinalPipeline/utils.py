@@ -12,6 +12,8 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import concurrent
 
+from torch_scatter import scatter_max, scatter_add
+from torch_geometric.data import Batch
 
 cwd = os.getcwd()
 parent_dir = os.path.dirname(cwd)
@@ -488,4 +490,416 @@ class GenerationModule():
                     mol_list.append(mol_graph)
         print("Average score 3: ", counting_scores_3_total / counting_total_total)           
         return mol_list
+def return_current_nodes_batched(batch_graph, current_nodes_tensor : torch.tensor):
 
+    # Count the number of nodes in each graph up to (but not including) the current node
+    node_counts = batch_graph.batch.bincount().cumsum(0)
+    offsets = torch.roll(node_counts, shifts=1, dims=0)
+    offsets[0] = 0  # The first graph has no offset
+
+    # Add the offsets to the current_nodes indices
+    current_nodes_tensor += offsets
+
+    return current_nodes_tensor
+        
+
+def set_feature_position(batch_graph, current_nodes_tensor):
+    # Add feature position
+    zeros_tensor = torch.zeros(batch_graph.x.size(0), 1, device=batch_graph.x.device)
+    batch_graph.x = torch.cat([batch_graph.x, zeros_tensor], dim=1)
+    current_nodes_expanded = current_nodes_tensor[batch_graph.batch]
+    # Create a tensor that contains the cumulative sum of nodes up to the current node in each graph
+    cumulative_current_nodes = (torch.arange(batch_graph.x.size(0), device=batch_graph.x.device) < (current_nodes_expanded)).float()
+    # Flatten cumulative_current_nodes before using it for indexing
+    cumulative_current_nodes = cumulative_current_nodes.view(-1)
+    # Set the feature position for each node
+    batch_graph.x[:, -1] = cumulative_current_nodes
+
+    return batch_graph
+
+def set_last_nodes(batch_graph):
+    
+    node_counts = batch_graph.batch.bincount().cumsum(0)
+    offsets = torch.roll(node_counts, shifts=1, dims=0)
+    offsets[0] = 0  # The first graph has no offset
+    last_nodes_each_graph = batch_graph.batch.bincount() - 1 + offsets
+    batch_graph.x[last_nodes_each_graph, -1] = 1
+
+    return batch_graph, last_nodes_each_graph
+
+
+def create_mask(batch_graph, current_nodes_tensor : torch.tensor, last_nodes):
+    total_nodes = batch_graph.x.size(0)
+    # Expand current_nodes to match the total number of nodes
+    expanded_current_nodes = current_nodes_tensor[batch_graph.batch]
+    mask = (torch.arange(batch_graph.x.size(0), device=batch_graph.x.device) > (expanded_current_nodes)).float()
+    # Create a new mask where the last node of each graph is marked as False
+    mask[last_nodes] = False
+
+    # Convert the mask to a boolean mask
+    mask = mask.bool()
+    
+    return mask
+
+
+def add_nodes_and_edges(graphs, new_nodes, new_edges, current_nodes, mask_gnn2):
+    # Iterate over the graphs, new nodes and edges, current nodes and mask simultaneously
+    for graph, new_node, new_edge, current_node, add in zip(graphs, new_nodes, new_edges, current_nodes, mask_gnn2):
+        # If the mask for this graph is False, do nothing
+        if not add:
+            continue
+      
+        # Add the new node to the graph
+        graph.x = torch.cat([graph.x, new_node.unsqueeze(0)], dim=0)
+        
+        # Add an edge from the new node to the current node, and from the current node to the new node
+        # to ensure that the graph remains undirected
+        new_node_index = graph.x.size(0) - 1  # The index of the new node
+
+        new_edge_indices = torch.tensor([[new_node_index, current_node], [current_node, new_node_index]], device=graph.edge_index.device)
+        graph.edge_index = torch.cat([graph.edge_index, new_edge_indices], dim=1)
+        
+        # Add the new edge attributes to the graph
+        graph.edge_attr = torch.cat([graph.edge_attr, new_edge.unsqueeze(0).repeat(2, 1)], dim=0)
+    
+    return graphs
+
+def select_node_batch(tensor, batch_data, edge_size, mask):
+    # Sum on the first dimensions of each vector
+    sum_on_first_dims = tensor[:, :edge_size - 1].sum(dim=1)
+
+    # Apply mask to the sum tensor, setting masked values to -inf
+    masked_sum = sum_on_first_dims.masked_fill(~mask, float('-inf'))
+
+    # Use scatter_max to find maximum values and their indices for each batch
+    max_values, max_indices = scatter_max(masked_sum, batch_data, dim_size=batch_data.max().item() + 1)
+
+    # Check if there is at least one True value in each graph
+    count_mask = scatter_add(mask.int(), batch_data, dim_size=batch_data.max().item() + 1)
+
+    # Replace indices where there were no True values in the mask with -1 (or any value you want)
+    max_indices = max_indices.where(count_mask > 0, torch.tensor(-1).to(max_indices.device))
+
+    # Sample using the tensor using the multinomial function
+    sampled_indices = tensor.multinomial(num_samples=1).squeeze()
+
+    # Replace -1 values in max_indices with the corresponding sampled_indices
+    final_indices = torch.where(max_indices != -1, sampled_indices[max_indices], tensor.size(1) - 1)
+
+    return final_indices, max_indices
+
+# Function to check the valence of the nodes in the graph
+
+def check_valence(graph, node):
+    # Get the type of the node
+    node_type = torch.argmax(graph.x[node])
+
+    # Compute the valence of each node by summing the bond types of all edges connected to the node
+    bond_types = torch.argmax(graph.edge_attr, dim=1) + 1  # add 1 to count single bonds as 1, etc.
+    valences = torch.bincount(graph.edge_index[0], weights=bond_types)
+
+    # Check if the valence is superior to the limit
+    if node_type == 0:
+        max_valence = 4
+    elif node_type in [1, 2]:
+        max_valence = 3
+    else:
+        max_valence = 6
+
+    if valences[node].item() > max_valence:
+        raise ValueError(f"Valence of node {node} is superior to {max_valence}")
+
+    return valences
+    
+def add_edges_and_attributes(graphs, indices, choices, num_choices, batch, mask):
+    # Create a one-hot encoded tensor of shape [num_choices, len(choices)]
+    one_hot_choices = torch.zeros(num_choices, choices.size(0), device=choices.device).scatter_(0, choices.unsqueeze(0), 1)
+
+    # Compute cumulative node counts for each graph
+    node_counts = torch.bincount(batch)
+    node_counts_shifted = torch.cat([torch.tensor([0], device=node_counts.device), node_counts[:-1]])
+    cumulative_node_counts = node_counts_shifted.cumsum(0)
+
+    # Compute indices in each graph
+    indices_in_each_graph = indices - cumulative_node_counts[batch[indices]]
+
+    for i, graph in enumerate(graphs):
+        if mask[i]:
+            # Add an edge from the max_index node to the last node
+            last_node_index = graph.num_nodes - 1
+
+            if choices[i] != num_choices - 1:  # If the choice is not the last column
+
+                # Add the edge
+                new_edge = torch.tensor([[indices_in_each_graph[i], last_node_index], [last_node_index, indices_in_each_graph[i]]], device=graph.edge_index.device)
+                graph.edge_index = torch.cat([graph.edge_index, new_edge], dim=1) if graph.edge_index is not None else new_edge
+
+                # Add the corresponding edge attribute
+                new_attr = one_hot_choices[:, i].unsqueeze(1).t() 
+                graph.edge_attr = torch.cat([graph.edge_attr, new_attr, new_attr], dim=0) if graph.edge_attr is not None else new_attr
+
+    return graphs
+
+def sample_first_atom_batch(batch_size, encoding = 'reduced'):
+    if encoding == 'reduced' or encoding == 'charged':
+        prob_dict = {'60': 0.7385023585929047, 
+                    '80': 0.1000143018658728, 
+                    '70': 0.12239949901813525, 
+                    '90': 0.013786373862576426, 
+                    '160': 0.017856330814654413,
+                    '170': 0.007441135845856433}
+    if encoding == 'polymer':
+        prob_dict = {'60': 0.7489344573582472,
+                    '70': 0.0561389266682314,
+                    '80': 0.0678638375933265,
+                    '160': 0.08724385192820308,
+                    '90': 0.032130486119902095,
+                    '140': 0.007666591133009364,
+                    '150': 2.184919908044154e-05}
+
+    atoms = [random.choices(list(prob_dict.keys()), weights=list(prob_dict.values()))[0] for _ in range(batch_size)]
+    return atoms
+
+def create_torch_graph_from_one_atom_list(atoms, edge_size, encoding_option='reduced') -> list:
+    graphs = []
+    for atom in atoms:
+        num_atom = int(atom)
+        atom_attribute = node_encoder(num_atom, encoding_option=encoding_option)
+        # Create graph
+        graph = torch_geometric.data.Data(x=atom_attribute.view(1, -1), edge_index=torch.empty((2, 0), dtype=torch.long), edge_attr=torch.empty((0, edge_size)))
+        graphs.append(graph)
+
+    
+    return graphs
+
+class MolGenBatch():
+    def __init__(self, GNN1, GNN2, GNN3, encoding_size, edge_size, batch_size, feature_position, device, save_intermidiate_states = False, encoding_option = 'charged', score_list = [], desired_score_list = []):
+
+        self.mol_graphs_list = create_torch_graph_from_one_atom_list(sample_first_atom_batch(batch_size = batch_size, encoding = encoding_option), edge_size=edge_size, encoding_option=encoding_option)
+        self.queues = [[0] for _ in range(batch_size)]
+        self.batch_size = batch_size
+        self.GNN1 = GNN1
+        self.GNN2 = GNN2
+        self.GNN3 = GNN3
+        self.device = device
+        self.feature_position = feature_position
+        self.encoding_size = encoding_size
+        self.edge_size = edge_size
+        self.save_intermidiate_states = save_intermidiate_states
+        if save_intermidiate_states:
+            self.intermidiate_states = []
+
+        self.score_list = score_list
+        self.desired_score_list = desired_score_list
+        self.finished_molecules = []
+
+    def one_step(self):
+        with torch.no_grad():
+
+            # Lists to store the updated queues and current_nodes
+            updated_queues = []
+            current_nodes = []
+            new_mol_graphs_list = []
+
+            # Loop over each queue
+            for i, queue in enumerate(self.queues):
+                # If a queue is empty, its corresponding molecule is finished
+                if not queue:
+                    self.finished_molecules.append(self.mol_graphs_list[i])
+                    self.batch_size -= 1
+                else:
+                    updated_queues.append(queue)
+                    new_mol_graphs_list.append(self.mol_graphs_list[i])
+                    current_nodes.append(queue[0])
+
+            # Replace the original mol_graphs_list with the new one
+            self.mol_graphs_list = new_mol_graphs_list
+            self.queues = updated_queues
+
+            if len(self.mol_graphs_list) == 0:
+                return 
+            """
+            Prepare the GNN 1 BATCH
+            """
+            batch_graph12 = Batch.from_data_list(self.mol_graphs_list).to(self.device)
+            current_nodes_tensor = torch.tensor(current_nodes, device=self.device, dtype=torch.long)
+            current_nodes_batched = return_current_nodes_batched(batch_graph12, current_nodes_tensor) #reindex the nodes to match the batch size
+            batch_graph12.x[current_nodes_batched, -1] = 1
+            
+            if self.feature_position:
+                batch_graph12 = set_feature_position(batch_graph12, current_nodes_batched)
+            
+            batch_graph12 = add_score_features(batch_graph12, self.score_list, self.desired_score_list, GNN_type = 1)
+            predictions = self.GNN1(batch_graph12)
+
+            # Apply softmax to prediction
+            softmax_predictions = F.softmax(predictions, dim=1)
+            # Sample next node from prediction
+            predicted_nodes = torch.multinomial(softmax_predictions, num_samples=1)
+
+            # Create a mask for determining which graphs should continue to GNN2
+            mask_gnn2 = (predicted_nodes != self.encoding_size - 1).flatten()
+
+            # Handle the stopping condition (where predicted_node is encoding_size - 1)
+            stop_mask = (predicted_nodes == self.encoding_size - 1).flatten()
+            # Remove the first node from the queues of graphs that have stopped
+            self.queues = [queue[1:] if stopped else queue for queue, stopped in zip(self.queues, stop_mask)]
+
+            # Encode next node for the entire batch
+            encoded_predicted_nodes = torch.zeros(predictions.size(), device=self.device, dtype=torch.float)
+            encoded_predicted_nodes.scatter_(1, predicted_nodes, 1)
+
+            # Add the size of x to the queue for graphs that haven't stopped
+            self.queues = [queue + [graph.x.size(0)] if continue_gnn2 else queue
+                        for queue, graph, continue_gnn2 in zip(self.queues, self.mol_graphs_list, mask_gnn2)]
+
+            #GNN2 
+
+            if self.feature_position:
+                    
+                # add zeros to the neighbor
+                encoded_predicted_nodes = torch.cat([encoded_predicted_nodes, torch.zeros(self.batch_size, 1).to(encoded_predicted_nodes.device)], dim=1)
+
+            batch_graph12.neighbor = encoded_predicted_nodes
+
+            batch_graph12 = add_score_features(batch_graph12, self.score_list, self.desired_score_list, GNN_type = 2)
+
+            assert batch_graph12.x.size(1) == batch_graph12.neighbor.size(1)
+            
+            predictions2 = self.GNN2(batch_graph12.to(self.device))
+            predicted_edges = torch.multinomial(F.softmax(predictions2, dim=1), num_samples=1)
+
+            encoded_predicted_edges = torch.zeros_like(predictions2, device=self.mol_graphs_list[0].x.device, dtype=torch.float)
+            encoded_predicted_edges.scatter_(1, predicted_edges.detach().cpu(), 1)
+            
+            # Create a new node that is going to be added to the graph for each batch
+            new_nodes = torch.zeros(self.batch_size, self.encoding_size, device=self.mol_graphs_list[0].x.device, dtype=torch.float)
+            new_nodes.scatter_(1, predicted_nodes.detach().cpu(), 1)
+            #GNN3
+
+            # Add the node and the edge to the graph
+            new_graph_list = add_nodes_and_edges(self.mol_graphs_list, new_nodes, encoded_predicted_edges, current_nodes, mask_gnn2)
+            batch_graph3 = Batch.from_data_list(new_graph_list).to(self.device)
+            batch_graph3, last_nodes = set_last_nodes(batch_graph3)
+            current_nodes_batched = return_current_nodes_batched(batch_graph3, torch.tensor(current_nodes, device=self.device, dtype=torch.long)) #reindex the nodes to match the batch size
+            
+            if self.feature_position:
+                batch_graph3 = set_feature_position(batch_graph3, current_nodes_batched)
+            
+            mask = create_mask(batch_graph3, current_nodes_tensor = current_nodes_batched, last_nodes = last_nodes)
+            batch_graph3.mask = mask
+
+            batch_graph3 = add_score_features(batch_graph3, self.score_list, self.desired_score_list, GNN_type = 3)
+
+            prediction3 = self.GNN3(batch_graph3)
+            
+            softmax_prediction3 = F.softmax(prediction3, dim=1)
+            edges_predicted, max_indices = select_node_batch(softmax_prediction3, batch_graph3.batch, self.edge_size, mask)
+            new_graph_list = add_edges_and_attributes(new_graph_list, max_indices.detach().cpu(), edges_predicted.detach().cpu(), self.edge_size, batch_graph3.batch.detach().cpu(), mask_gnn2)
+
+
+            self.mol_graphs_list = new_graph_list
+
+    def full_generation(self):
+        max_iter = 150
+        i = 0
+        while len(self.queues) > 0:
+            if i > max_iter:
+                break
+            self.one_step()
+            i += 1
+
+            if self.save_intermidiate_states:
+                self.intermidiate_states.append(self.mol_graph.clone())
+        
+    def is_valid(self):
+        if self.edge_size == 3:
+            edge_mapping = 'kekulized'
+        else:
+            edge_mapping = 'aromatic'
+        SMILES_str = tensor_to_smiles(self.mol_graph.x, self.mol_graph.edge_index, self.mol_graph.edge_attr, edge_mapping, encoding_type=self.encoding_type)
+        mol = Chem.MolFromSmiles(SMILES_str)
+        if mol is None:
+            return False
+        else:
+            return True
+
+
+class GenerationModuleBatch():
+    def __init__(self, config1, config2, config3, encoding_size, edge_size, pathGNN1, pathGNN2, pathGNN3, checking_mode = False, encoding_type = 'charged', batch_size = 64, score_list = [], desired_score_list = []):
+        self.config1 = config1
+        self.config2 = config2
+        self.config3 = config3
+        self.encoding_size = encoding_size
+        self.edge_size = edge_size
+        self.batch_size = batch_size
+        self.encoding_type = encoding_type
+        self.feature_position = config1["feature_position"]
+        self.checking_mode = checking_mode
+
+        self.score_list = config1["score_list"]
+        self.desired_score_list = desired_score_list
+
+        if self.checking_mode:
+            self.non_valid_molecules = []
+
+        self.GNN1 = get_model_GNN1(config1, encoding_size, edge_size)
+        self.GNN2 = get_model_GNN2(config2, encoding_size, edge_size)
+        self.GNN3 = get_model_GNN3(config3, encoding_size, edge_size)
+
+        self.optimizer_GNN1 = torch.optim.Adam(self.GNN1.parameters(), lr=config1["lr"])
+        self.optimizer_GNN2 = torch.optim.Adam(self.GNN2.parameters(), lr=config2["lr"])
+        self.optimizer_GNN3 = torch.optim.Adam(self.GNN3.parameters(), lr=config3["lr"])
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.GNN1_model, self.optimizer_GNN1 = load_model(pathGNN1, self.GNN1, self.optimizer_GNN1)
+        self.GNN2_model, self.optimizer_GNN2 = load_model(pathGNN2, self.GNN2, self.optimizer_GNN2)
+        self.GNN3_model, self.optimizer_GNN3 = load_model(pathGNN3, self.GNN3, self.optimizer_GNN3)
+
+        self.GNN1_model.to(self.device)
+        self.GNN2_model.to(self.device)
+        self.GNN3_model.to(self.device)
+
+        self.GNN1_model.eval()
+        self.GNN2_model.eval()
+        self.GNN3_model.eval()
+    
+    def generate_single_molecule(self):
+        mol = MolGenBatch(self.GNN1_model,
+                     self.GNN2_model,
+                     self.GNN3_model,
+                     self.encoding_size,
+                     self.edge_size,
+                     self.batch_size,
+                     self.feature_position,
+                     self.device,
+                     save_intermidiate_states=self.checking_mode,
+                     encoding_option=self.encoding_type,
+                     score_list=self.score_list,
+                     desired_score_list=self.desired_score_list)
+        mol.full_generation()
+        if self.checking_mode:
+            # check validity of the molecule
+            if not mol.is_valid():
+                self.non_valid_molecules.append(mol.intermidiate_states)
+        return mol.finished_molecules
+
+    def generate_mol_list(self, n_mol, n_threads=1):
+        mol_list = []
+        if n_threads == 1:
+            for i in tqdm(range(n_mol), desc="Generating molecules"):
+                mol_graph = self.generate_single_molecule()
+                mol_list += mol_graph
+        else:
+
+            # Utilize ThreadPoolExecutor to parallelize the task
+            with ThreadPoolExecutor(max_workers=n_threads) as executor:
+                # Submit tasks to the thread pool
+                future_to_mol = {executor.submit(self.generate_single_molecule): i for i in range(n_mol)}
+                
+                # Collect the results as they become available
+                for future in tqdm(as_completed(future_to_mol), total=n_mol, desc="Generating molecules"):
+                    mol_graph = future.result()
+                    mol_list.append(mol_graph)
+                    
+        return mol_list
