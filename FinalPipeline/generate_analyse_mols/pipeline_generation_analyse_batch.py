@@ -207,7 +207,7 @@ def main(args, n_threads=4):
                             desired_score_list=args.desired_scores_list)
 
     print('Generating molecules...')
-    graph_batch = module.generate_mol_list(args.n_mols // args.batch_size)
+    graph_batch = module.generate_mol_list(args.n_mols // args.batch_size, n_threads=args.n_threads)
 
     if args.keku:
         edge_mapping='kekulized'

@@ -840,6 +840,8 @@ class GenerationModuleBatch():
         self.score_list = config1["score_list"]
         self.desired_score_list = desired_score_list
 
+        self.num_threads = num_threads
+
         if self.checking_mode:
             self.non_valid_molecules = []
 
