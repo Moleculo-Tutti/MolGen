@@ -37,7 +37,7 @@ from Model.GNN3 import  ModelWithgraph_embedding_modif, ModelWithgraph_embedding
 from Model.metrics import  metric_gnn3_bis_graph_level, metric_gnn3_bis_if_cycle
 
 
-def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_node, epoch_metric, print_bar = False, model_graph = None, criterion_graph = None):
+def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_node, epoch_metric, print_bar = False, model_graph = None, criterion_graph = None, criterion_node_softmax = None):
     model_node.train()
     model_graph.train()
     total_loss = 0
@@ -63,11 +63,11 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         
         #gnn graph
         close = model_graph(data)
-        close_output = torch.sigmoid(close)
         supposed_close_label = supposed_close_label.unsqueeze(1)
+        close_sig = torch.sigmoid(close)
 
         try:
-            loss_graph = criterion_graph(close_output, supposed_close_label)
+            loss_graph = criterion_graph(close, supposed_close_label)
             loss_graph.backward()
             total_loss_graph += loss_graph.item() * data.num_graphs
 
@@ -80,7 +80,8 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
 
             #gnn node
             out = model_node(data)
-            prob_which_link = torch.sigmoid(out[:,0])
+            out_which_link = out[:,0]
+            prob_which_link = torch.sigmoid(out_which_link)
             num_graph = data.batch.max() + 1
             exp_sum_groups = torch.zeros(num_graph, device=device)
             exp_values = torch.exp(out[:, 1])
@@ -89,8 +90,8 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
             prob_which_neighbour = exp_values / exp_sum_groups[data.batch]
 
             # Use node_labels_indices with CrossEntropyLoss but without 
-            loss_where = criterion_node(prob_which_neighbour[mask], node_labels[mask,1])
-            loss_which_type = criterion_node(prob_which_link[node_where_closing_label], node_labels[node_where_closing_label,0])
+            loss_where = criterion_node_softmax(prob_which_neighbour[mask], node_labels[mask,1])
+            loss_which_type = criterion_node(out_which_link[node_where_closing_label], node_labels[node_where_closing_label,0])
             loss = loss_where + loss_which_type
         
             loss.backward()
@@ -99,14 +100,14 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
             total_loss += loss_graph.item() * data.num_graphs * data.num_graphs +loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
         except Exception as e:
             # Generic handler for any other exception
-            print('model1_output', close_output)
+            print('model1_output', close_sig)
             print('model2_output', out)
             print('sigmoid_ouput', prob_which_link)
             print('softmax_output', prob_which_neighbour)
             print("An error occurred:", str(e))
 
         if epoch_metric:
-            num_wanted_cycles, cycles_predicted, not_cycles_well_predicted, cycles_well_predicted = metric_gnn3_bis_graph_level(data, close_output, supposed_close_label, device=device)
+            num_wanted_cycles, cycles_predicted, not_cycles_well_predicted, cycles_well_predicted = metric_gnn3_bis_graph_level(data, close_sig, supposed_close_label, device=device)
             cycles_created_at_good_place, good_types_cycles_predicted = metric_gnn3_bis_if_cycle(data, prob_which_link, prob_which_neighbour, node_labels, supposed_close_label, device=device)
  
             total_graphs_processed += data.num_graphs
@@ -120,7 +121,7 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
             del cycles_predicted, num_wanted_cycles, not_cycles_well_predicted, cycles_well_predicted, cycles_created_at_good_place, good_types_cycles_predicted
         
         del data, node_labels, mask, supposed_close_label, node_where_closing_label, out, prob_which_link, num_graph, exp_sum_groups, exp_values, prob_which_neighbour
-        del loss_where, loss_which_type, loss , loss_graph, close_output, supposed_close_label_extended
+        del loss_where, loss_which_type, loss , loss_graph, supposed_close_label_extended, out_which_link, close_sig, close
 
 
     if (total_graphs_processed == 0):
@@ -154,7 +155,7 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         return total_loss / len(loader.dataset), None, None, None, None, None, None
 
 
-def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_bar=False, val_metric_size=1, model_graph=None, criterion_graph = None):
+def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_bar=False, val_metric_size=1, model_graph=None, criterion_graph = None,criterion_node_softmax = None):
     model_node.eval()
     model_graph.eval()
     total_loss = 0
@@ -178,9 +179,9 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
                     
             #gnn graph
             close = model_graph(data)
-            close_output = torch.sigmoid(close)
+            close_sig = torch.sigmoid(close)
             supposed_close_label = supposed_close_label.unsqueeze(1)
-            loss_graph = criterion_graph(close_output, supposed_close_label)
+            loss_graph = criterion_graph(close, supposed_close_label)
             loss_graph.backward()
             total_loss_graph += loss_graph.item() * data.num_graphs
 
@@ -195,7 +196,8 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
 
             #gnn node
             out = model_node(data)
-            prob_which_link = torch.sigmoid(out[:,0])
+            out_which_link = out[:,0]
+            prob_which_link = torch.sigmoid(out_which_link)
             num_graph = data.batch.max() + 1
             exp_sum_groups = torch.zeros(num_graph, device=device)
             exp_values = torch.exp(out[:, 1])
@@ -204,14 +206,14 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
             prob_which_neighbour = exp_values / exp_sum_groups[data.batch]
 
             # Use node_labels_indices with CrossEntropyLoss but without 
-            loss_where = criterion_node(prob_which_neighbour[mask], node_labels[mask,1])
-            loss_which_type = criterion_node(prob_which_link[node_where_closing_label], node_labels[node_where_closing_label,0])
+            loss_where = criterion_node_softmax(prob_which_neighbour[mask], node_labels[mask,1])
+            loss_which_type = criterion_node(out_which_link[node_where_closing_label], node_labels[node_where_closing_label,0])
 
             total_loss_node += loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
             total_loss += loss_graph.item() * data.num_graphs * data.num_graphs +loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
             # Add softmax to out
         
-            num_wanted_cycles, cycles_predicted, not_cycles_well_predicted, cycles_well_predicted = metric_gnn3_bis_graph_level(data, close_output, supposed_close_label, device=device)
+            num_wanted_cycles, cycles_predicted, not_cycles_well_predicted, cycles_well_predicted = metric_gnn3_bis_graph_level(data, close_sig, supposed_close_label, device=device)
             cycles_created_at_good_place, good_types_cycles_predicted = metric_gnn3_bis_if_cycle(data, prob_which_link, prob_which_neighbour, node_labels, supposed_close_label, device=device)
 
             total_graphs_processed += data.num_graphs
@@ -225,7 +227,7 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
             del cycles_predicted, num_wanted_cycles, not_cycles_well_predicted, cycles_well_predicted, cycles_created_at_good_place, good_types_cycles_predicted
             
             del data, node_labels, mask, supposed_close_label, node_where_closing_label, out, prob_which_link, num_graph, exp_sum_groups, exp_values, prob_which_neighbour
-            del loss_where, loss_which_type, loss_graph, close_output, supposed_close_label_extended
+            del loss_where, loss_which_type, loss_graph, supposed_close_label_extended, out_which_link, close, close_sig
 
 
     if (total_graphs_processed == 0):
@@ -293,8 +295,9 @@ class TrainGNN3_bis():
             self.begin_epoch = checkpoint['epoch']
 
         #cross entropy loss without softmax
-        self.criterion_node = nn.BCELoss()
-        self.criterion_graph = nn.BCELoss()
+        self.criterion_node = nn.BCEWithLogitsLoss()
+        self.criterion_node_softmax = nn.NLLLoss()
+        self.criterion_graph = nn.BCEWithLogitsLoss()
 
         self.training_history = pd.DataFrame(columns=['epoch', 'loss', 'accuracy_num_cycles', 'precision_num_cycles', 'recall_num_cycles', 'accuracy_neighhbor_chosen' , 'accuracy_type_chosen', 'f1_score_num_cycles'])
         self.eval_history = pd.DataFrame(columns=['epoch', 'loss', 'accuracy_num_cycles', 'precision_num_cycles', 'recall_num_cycles', 'accuracy_neighhbor_chosen' , 'accuracy_type_chosen', 'f1_score_num_cycles'])
@@ -407,7 +410,8 @@ class TrainGNN3_bis():
                     criterion_node=self.criterion_node,
                     print_bar = self.print_bar,
                     model_graph = self.model_graph,
-                    criterion_graph=self.criterion_graph)
+                    criterion_graph=self.criterion_graph,
+                    criterion_node_softmax=self.criterion_node_softmax)
                 
                 self.training_history.loc[epoch] = [epoch, loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles]
 
@@ -420,7 +424,8 @@ class TrainGNN3_bis():
                     print_bar = self.print_bar,
                     val_metric_size = self.val_metric_size,
                     model_graph = self.model_graph,
-                    criterion_graph=self.criterion_graph)
+                    criterion_graph=self.criterion_graph,
+                    criterion_node_softmax=self.criterion_node_softmax)
                 
                 self.eval_history.loc[epoch] = [epoch,loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles]
                 
@@ -443,7 +448,8 @@ class TrainGNN3_bis():
                     criterion_node=self.criterion_node,
                     print_bar = self.print_bar,
                     model_graph = self.model_graph,
-                    criterion_graph=self.criterion_graph)
+                    criterion_graph=self.criterion_graph,
+                    criterion_node_softmax=self.criterion_node_softmax)
                 
                 self.training_history.loc[epoch] = [epoch, loss, None, None, None, None, None, None]
                 self.eval_history.loc[epoch] = [epoch, None, None, None, None, None, None, None]
