@@ -57,13 +57,21 @@ def metric_gnn3_bis_if_cycle(model_input, prob_which_link, prob_which_neighbour,
             #find which neighbor have the highest probability to be the next node
             #find in current_graph_target the index of the node with a 1 in second dimensio
             index_of_interest = torch.where(current_graph_target[:,1] == 1)[0]
-            print("current_graph_target", current_graph_target)
-            print("torch_where", torch.where(current_graph_target[:,1] == 1))
-            print("index_of_interest", index_of_interest)
-            if torch.multinomial(prob_which_neighbour[start_index:end_index],1) ==  index_of_interest:
+            index_chosen = torch.multinomial(prob_which_neighbour[start_index:end_index],1)
+            if index_chosen ==  index_of_interest[0]:
                 cycles_created_at_good_place += 1
-                if torch.multinomial(prob_which_link[start_index:end_index],1) == current_graph_target[index_of_interest,0]:
+                print(prob_which_link[start_index:end_index])
+                print("index chosen : ", index_chosen)
+                print(prob_which_link[start_index:end_index][index_chosen])
+                p = (prob_which_link[start_index:end_index][index_chosen,0])
+                proba = torch.rand(1)
+                if proba < p:
+                    prediction = 1
+                else:
+                    prediction = 0
+                if prediction == current_graph_target[index_of_interest,0]:
                     good_types_cycles_predicted += 1
+    del index_of_interest, index_chosen, current_graph_target, p, prediction, proba
     return cycles_created_at_good_place, good_types_cycles_predicted
 
 
