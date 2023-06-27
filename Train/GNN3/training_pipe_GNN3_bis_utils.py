@@ -100,10 +100,11 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
             try:
                 loss.backward()
                 optimizer.step()
+                total_loss_node += loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
+                total_loss += loss_graph.item() * data.num_graphs * data.num_graphs +loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
             except RuntimeError as e:
                 print('error raised : ',e )
-            total_loss_node += loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
-            total_loss += loss_graph.item() * data.num_graphs * data.num_graphs +loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
+           
         except Exception as e:
             # Generic handler for any other exception
             print('model1_output', close_sig)
