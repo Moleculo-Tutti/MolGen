@@ -66,7 +66,7 @@ def metric_gnn3_bis_if_cycle(model_input, prob_which_link, prob_which_neighbour,
                     prediction = torch.tensor(1, device = device)
                 else:
                     prediction = torch.tensor(0, device = device)
-                if prediction == current_graph_target[index_of_interest,0]:
+                if prediction == current_graph_target[index_of_interest,0][0]:
                     good_types_cycles_predicted += 1
                 del p , proba, prediction
             del current_graph_target
