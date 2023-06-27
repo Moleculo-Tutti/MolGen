@@ -86,12 +86,15 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         # Calculer les probabilités softmax par groupe d'indices
         prob_which_neighbour = exp_values / exp_sum_groups[data.batch]
 
-        # Convert node_labels to class indices
-        node_labels = node_labels.to(device)
-        mask = mask.to(device)
+
+        print('prob_which_neighbour with mask', prob_which_neighbour[mask].size)
+        print('prob_which_neighbour', prob_which_neighbour.size)
+        print('node_labels  ask', node_labels.size)
+        print('node_labels1 with mask', node_labels[mask].size)
+        print('node_labels1', node_labels[mask,1].size)
+        print('node_labels', node_labels[mask][1].size)
 
         # Use node_labels_indices with CrossEntropyLoss but without 
-        print(prob_which_neighbour[mask].size, node_labels[mask][1].size)
         loss_where = criterion_node(prob_which_neighbour[mask], node_labels[mask][1])
         loss_which_type = criterion_node(prob_which_link[node_where_closing_label], node_labels[node_where_closing_label][0])
         loss = loss_where + loss_which_type
@@ -190,10 +193,6 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
         exp_sum_groups.scatter_add_(0, data.batch, exp_values)        
         # Calculer les probabilités softmax par groupe d'indices
         prob_which_neighbour = exp_values / exp_sum_groups[data.batch]
-
-        # Convert node_labels to class indices
-        node_labels = node_labels.to(device)
-        mask = mask.to(device)
 
         # Use node_labels_indices with CrossEntropyLoss but without 
         loss_where = criterion_node(prob_which_neighbour[mask], node_labels[mask][1])
