@@ -211,9 +211,14 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
         del loss_where, loss_which_type, loss_graph, close_output, supposed_close_label_extended
 
 
-    
+    if (total_graphs_processed == 0):
+        total_graphs_processed = 1
+    if global_num_wanted_cycles == 0:
+        global_num_wanted_cycles = 1
+    if global_cycles_predicted == 0:
+        global_cycles_predicted = 1
     accuracy_num_cycles = (global_cycles_well_predicted + global_non_cycles_well_predicted) / total_graphs_processed
-    precision_num_cycles = global_cycles_well_predicted/ global_cycles_predicted
+    precision_num_cycles = global_cycles_well_predicted / global_cycles_predicted
     recall_num_cycles = global_cycles_well_predicted/ global_num_wanted_cycles  
     accuracy_neighhbor_chosen = global_well_placed_cycles / global_num_wanted_cycles
     accuracy_type_chosen = global_well_type_cycles / global_num_wanted_cycles
