@@ -86,16 +86,8 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         # Calculer les probabilités softmax par groupe d'indices
         prob_which_neighbour = exp_values / exp_sum_groups[data.batch]
 
-
-        print('prob_which_neighbour with mask', prob_which_neighbour[mask].size())
-        print('prob_which_neighbour', prob_which_neighbour.size())
-        print('node_labels  ask', node_labels.size())
-        print('node_labels1 with mask', node_labels[mask].size())
-        print('node_labels1', node_labels[mask,1].size())
-        print('node_labels', node_labels[mask][1].size())
-
         # Use node_labels_indices with CrossEntropyLoss but without 
-        loss_where = criterion_node(prob_which_neighbour[mask], node_labels[mask][1])
+        loss_where = criterion_node(prob_which_neighbour[mask], node_labels[mask,1])
         loss_which_type = criterion_node(prob_which_link[node_where_closing_label], node_labels[node_where_closing_label][0])
         loss = loss_where + loss_which_type
     
@@ -344,7 +336,8 @@ class TrainGNN3_bis():
                                         size_info=self.size_info,
                                         max_size=self.max_size)
 
-
+        print("edge size =", edge_size)
+        print("modele num classes = ", model_node.num_classes)
         
         return loader_train, loader_val, model_node.to(self.device), encoding_size, edge_size, model_graph.to(self.device)
     
