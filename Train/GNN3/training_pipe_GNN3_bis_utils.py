@@ -114,15 +114,20 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         del loss_where, loss_which_type, loss , loss_graph, close_output, supposed_close_label_extended
 
 
-    
+    if (total_graphs_processed == 0):
+        total_graphs_processed = 1
+    if global_num_wanted_cycles == 0:
+        global_num_wanted_cycles = 1
+    if global_cycles_predicted == 0:
+        global_cycles_predicted = 1
     accuracy_num_cycles = (global_cycles_well_predicted + global_non_cycles_well_predicted) / total_graphs_processed
     precision_num_cycles = global_cycles_well_predicted/ global_cycles_predicted
     recall_num_cycles = global_cycles_well_predicted/ global_num_wanted_cycles  
     accuracy_neighhbor_chosen = global_well_placed_cycles / global_num_wanted_cycles
     accuracy_type_chosen = global_well_type_cycles / global_num_wanted_cycles
     f1_score_num_cycles = 2 * precision_num_cycles * recall_num_cycles / (precision_num_cycles + recall_num_cycles)
-    del global_cycles_predicted, global_num_wanted_cycles, global_non_cycles_well_predicted, global_cycles_well_predicted, global_well_placed_cycles, global_well_type_cycles
-    if epoch_metric:
+    del global_cycles_predicted, global_num_wanted_cycles, global_non_cycles_well_predicted, global_cycles_well_predicted, global_well_placed_cycles, global_well_type_cycles, total_graphs_processed
+    if epoch_metric: 
         return (
             total_loss / len(loader.dataset),
             accuracy_num_cycles,
@@ -151,64 +156,64 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
     global_well_placed_cycles = 0
     global_well_type_cycles = 0
 
-    progress_bar = tqdm(loader, desc="Training", unit="batch")
-    
-    for _, batch in enumerate(progress_bar):
-        data = batch[0].to(device)
-        node_labels = batch[1].to(device)
-        mask = batch[2].to(device)
-        supposed_close_label = batch[3].to(device) #1 if we close a cycle 0 otherwise
+    for i in tqdm(range(val_metric_size)):
+
+        for batch_idx, batch in enumerate(loader):
+            data = batch[0].to(device)
+            node_labels = batch[1].to(device)
+            mask = batch[2].to(device)
+            supposed_close_label = batch[3].to(device) #1 if we close a cycle 0 otherwise
+                    
+            #gnn graph
+            close = model_graph(data)
+            close_output = torch.sigmoid(close)
+            supposed_close_label = supposed_close_label.unsqueeze(1)
+            loss_graph = criterion_graph(close_output, supposed_close_label)
+            loss_graph.backward()
+            total_loss_graph += loss_graph.item() * data.num_graphs
+
+
                 
-        #gnn graph
-        close = model_graph(data)
-        close_output = torch.sigmoid(close)
-        supposed_close_label = supposed_close_label.unsqueeze(1)
-        loss_graph = criterion_graph(close_output, supposed_close_label)
-        loss_graph.backward()
-        total_loss_graph += loss_graph.item() * data.num_graphs
+            #we combine the mask with the supposed_close, if a graph is supposed_closed (no cycle to make) all these nodes are added to the mask
+            supposed_close_label_extended = supposed_close_label.repeat_interleave(torch.bincount(data.batch))
+            mask = torch.logical_and(mask, supposed_close_label_extended)
 
+            #node in the mask and who have their second value of vector equal to 1
+            node_where_closing_label = torch.logical_and(mask, node_labels[:,1] == 1)
 
+            #gnn node
+            out = model_node(data)
+            prob_which_link = torch.sigmoid(out[:,0])
+            num_graph = data.batch.max() + 1
+            exp_sum_groups = torch.zeros(num_graph, device=device)
+            exp_values = torch.exp(out[:, 1])
+            exp_sum_groups.scatter_add_(0, data.batch, exp_values)        
+            # Calculer les probabilités softmax par groupe d'indices
+            prob_which_neighbour = exp_values / exp_sum_groups[data.batch]
+
+            # Use node_labels_indices with CrossEntropyLoss but without 
+            loss_where = criterion_node(prob_which_neighbour[mask], node_labels[mask,1])
+            loss_which_type = criterion_node(prob_which_link[node_where_closing_label], node_labels[node_where_closing_label,0])
+
+            total_loss_node += loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
+            total_loss += loss_graph.item() * data.num_graphs * data.num_graphs +loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
+            # Add softmax to out
+        
+            num_wanted_cycles, cycles_predicted, not_cycles_well_predicted, cycles_well_predicted = metric_gnn3_bis_graph_level(data, close_output, supposed_close_label, device=device)
+            cycles_created_at_good_place, good_types_cycles_predicted = metric_gnn3_bis_if_cycle(data, prob_which_link, prob_which_neighbour, node_labels, supposed_close_label, device=device)
+
+            total_graphs_processed += data.num_graphs
+            global_cycles_predicted += cycles_predicted
+            global_num_wanted_cycles += num_wanted_cycles
+            global_non_cycles_well_predicted += not_cycles_well_predicted
+            global_cycles_well_predicted += cycles_well_predicted
+            global_well_placed_cycles += cycles_created_at_good_place
+            global_well_type_cycles += good_types_cycles_predicted
             
-        #we combine the mask with the supposed_close, if a graph is supposed_closed (no cycle to make) all these nodes are added to the mask
-        supposed_close_label_extended = supposed_close_label.repeat_interleave(torch.bincount(data.batch))
-        mask = torch.logical_and(mask, supposed_close_label_extended)
-
-        #node in the mask and who have their second value of vector equal to 1
-        node_where_closing_label = torch.logical_and(mask, node_labels[:,1] == 1)
-
-        #gnn node
-        out = model_node(data)
-        prob_which_link = torch.sigmoid(out[:,0])
-        num_graph = data.batch.max() + 1
-        exp_sum_groups = torch.zeros(num_graph, device=device)
-        exp_values = torch.exp(out[:, 1])
-        exp_sum_groups.scatter_add_(0, data.batch, exp_values)        
-        # Calculer les probabilités softmax par groupe d'indices
-        prob_which_neighbour = exp_values / exp_sum_groups[data.batch]
-
-        # Use node_labels_indices with CrossEntropyLoss but without 
-        loss_where = criterion_node(prob_which_neighbour[mask], node_labels[mask,1])
-        loss_which_type = criterion_node(prob_which_link[node_where_closing_label], node_labels[node_where_closing_label,0])
-
-        total_loss_node += loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
-        total_loss += loss_graph.item() * data.num_graphs * data.num_graphs +loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
-        # Add softmax to out
-       
-        num_wanted_cycles, cycles_predicted, not_cycles_well_predicted, cycles_well_predicted = metric_gnn3_bis_graph_level(data, close_output, supposed_close_label, device=device)
-        cycles_created_at_good_place, good_types_cycles_predicted = metric_gnn3_bis_if_cycle(data, prob_which_link, prob_which_neighbour, node_labels, supposed_close_label, device=device)
-
-        total_graphs_processed += data.num_graphs
-        global_cycles_predicted += cycles_predicted
-        global_num_wanted_cycles += num_wanted_cycles
-        global_non_cycles_well_predicted += not_cycles_well_predicted
-        global_cycles_well_predicted += cycles_well_predicted
-        global_well_placed_cycles += cycles_created_at_good_place
-        global_well_type_cycles += good_types_cycles_predicted
-        
-        del cycles_predicted, num_wanted_cycles, not_cycles_well_predicted, cycles_well_predicted, cycles_created_at_good_place, good_types_cycles_predicted
-        
-        del data, node_labels, mask, supposed_close_label, node_where_closing_label, out, prob_which_link, num_graph, exp_sum_groups, exp_values, prob_which_neighbour
-        del loss_where, loss_which_type, loss_graph, close_output, supposed_close_label_extended
+            del cycles_predicted, num_wanted_cycles, not_cycles_well_predicted, cycles_well_predicted, cycles_created_at_good_place, good_types_cycles_predicted
+            
+            del data, node_labels, mask, supposed_close_label, node_where_closing_label, out, prob_which_link, num_graph, exp_sum_groups, exp_values, prob_which_neighbour
+            del loss_where, loss_which_type, loss_graph, close_output, supposed_close_label_extended
 
 
     if (total_graphs_processed == 0):
@@ -223,10 +228,10 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
     accuracy_neighhbor_chosen = global_well_placed_cycles / global_num_wanted_cycles
     accuracy_type_chosen = global_well_type_cycles / global_num_wanted_cycles
     f1_score_num_cycles = 2 * precision_num_cycles * recall_num_cycles / (precision_num_cycles + recall_num_cycles)
-    del global_cycles_predicted, global_num_wanted_cycles, global_non_cycles_well_predicted, global_cycles_well_predicted, global_well_placed_cycles, global_well_type_cycles
+    del global_cycles_predicted, global_num_wanted_cycles, global_non_cycles_well_predicted, global_cycles_well_predicted, global_well_placed_cycles, global_well_type_cycles, total_graphs_processed
 
     return (
-            total_loss / len(loader.dataset),
+            total_loss /( val_metric_size* len(loader.dataset)),
             accuracy_num_cycles,
             precision_num_cycles, 
             recall_num_cycles, 
