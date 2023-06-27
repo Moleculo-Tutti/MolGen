@@ -111,7 +111,7 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
             del cycles_predicted, num_wanted_cycles, not_cycles_well_predicted, cycles_well_predicted, cycles_created_at_good_place, good_types_cycles_predicted
         
         del data, node_labels, mask, supposed_close_label, node_where_closing_label, out, prob_which_link, num_graph, exp_sum_groups, exp_values, prob_which_neighbour
-        del loss_where, loss_which_type, loss, loss_graph, close_output, supposed_close_label_extended
+        del loss_where, loss_which_type, loss , loss_graph, close_output, supposed_close_label_extended
 
 
     
@@ -208,7 +208,7 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
         del cycles_predicted, num_wanted_cycles, not_cycles_well_predicted, cycles_well_predicted, cycles_created_at_good_place, good_types_cycles_predicted
         
         del data, node_labels, mask, supposed_close_label, node_where_closing_label, out, prob_which_link, num_graph, exp_sum_groups, exp_values, prob_which_neighbour
-        del loss_where, loss_which_type, loss, loss_graph, close_output, supposed_close_label_extended
+        del loss_where, loss_which_type, loss_graph, close_output, supposed_close_label_extended
 
 
     
