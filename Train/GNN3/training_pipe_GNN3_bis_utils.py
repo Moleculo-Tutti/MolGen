@@ -80,7 +80,7 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         out = model_node(data)
         prob_which_link = torch.sigmoid(out[:,0])
         num_graph = data.batch.max() + 1
-        exp_sum_groups = torch.zeros(num_graph)
+        exp_sum_groups = torch.zeros(num_graph, device=device)
         exp_values = torch.exp(out[:, 1])
         exp_sum_groups.scatter_add_(0, data.batch, exp_values)        
         # Calculer les probabilités softmax par groupe d'indices
@@ -184,7 +184,7 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
         out = model_node(data)
         prob_which_link = torch.sigmoid(out[:,0])
         num_graph = data.batch.max() + 1
-        exp_sum_groups = torch.zeros(num_graph)
+        exp_sum_groups = torch.zeros(num_graph, device=device)
         exp_values = torch.exp(out[:, 1])
         exp_sum_groups.scatter_add_(0, data.batch, exp_values)        
         # Calculer les probabilités softmax par groupe d'indices
