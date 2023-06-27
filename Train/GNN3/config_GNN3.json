@@ -15,7 +15,7 @@
     "node_embedding_for_second_part" : false,
     "every_epoch_save" : 50,
     "every_epoch_metric" : 50,
-    "val_metric_size" : 20,
+    "val_metric_size" : 1,
     "num_workers": 32,
     "use_size": true,
     "max_size": 40,
