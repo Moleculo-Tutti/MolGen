@@ -21,6 +21,48 @@ def pseudo_accuracy_metric(model_output, target, random = False):
     del model_output, target
     return correct
 
+def metric_gnn3_bis_graph_level(model_input, model2_output, supposed_closed_target):
+    num_wanted_cycles = 0
+    cycles_well_predicted = 0
+    cycles_predicted = 0
+    not_cycles_well_predicted = 0
+    for i in range(model_input.num_graphs):
+        if supposed_closed_target[i] == 1:
+            num_wanted_cycles += 1
+            if model2_output[i] == 1:
+                cycles_well_predicted += 1
+        else:
+            if model2_output[i] == 0 :
+                not_cycles_well_predicted += 1
+        if model2_output[i] == 1:
+                cycles_predicted += 1
+    return num_wanted_cycles, cycles_predicted, not_cycles_well_predicted, cycles_well_predicted
+
+def metric_gnn3_bis_if_cycle(model_input, prob_which_link, prob_which_neighbour, target, supposed_closed_target):
+    #the mask are already done before 
+    num_cycles = 0 
+    cycles_created_at_good_place = 0
+    good_types_cycles_predicted = 0
+
+    cumsum_node_counts = model_input.batch.bincount().cumsum(dim=0)
+    for i in range(model_input.num_graphs):
+        if i == 0:
+            start_index = 0
+        else :
+            start_index = cumsum_node_counts[i-1]
+        end_index = cumsum_node_counts[i]
+        if supposed_closed_target[i] == 1: #the graph is interesting there is one closing
+            num_cycles += 1
+            current_graph_target = target[start_index:end_index]
+            #find which neighbor have the highest probability to be the next node
+            #find in current_graph_target the index of the node with a 1 in second dimensio
+            index_of_interest = torch.where(current_graph_target[:,1] == 1)[0]
+            if torch.multinomial(prob_which_neighbour[start_index:end_index],1) ==  index_of_interest:
+                cycles_created_at_good_place += 1
+                if torch.multinomial(prob_which_link[start_index:end_index],1) == current_graph_target[index_of_interest,0]:
+                    good_types_cycles_predicted += 1
+    return cycles_created_at_good_place, good_types_cycles_predicted
+
 
 def pseudo_accuracy_metric_gnn3(model_input, model_output, target, mask, edge_size):
     
@@ -49,9 +91,6 @@ def pseudo_accuracy_metric_gnn3(model_input, model_output, target, mask, edge_si
         current_graph_target = target[start_index:end_index]
         current_graph_output = model_output[start_index:end_index]
         mask_graph = mask[start_index:end_index]
-
-
-
 
         # compute softmax output 
         current_graph_output_masked = F.softmax(current_graph_output[mask_graph], dim=1)

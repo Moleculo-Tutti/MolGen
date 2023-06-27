@@ -34,230 +34,208 @@ sys.path.append(parent_parent_dir)
 
 from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_GNN3_bis
 from Model.GNN3 import  ModelWithgraph_embedding_modif, ModelWithgraph_embedding_close_or_not_with_node_embedding, ModelWithgraph_embedding_close_or_not_without_node_embedding
-from Model.metrics import  pseudo_accuracy_metric_gnn3
+from Model.metrics import  metric_gnn3_bis_graph_level, metric_gnn3_bis_if_cycle
 
 
-def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoch_metric, print_bar = False, model2 = None, criterion2 = None):
-    model.train()
-    model2.train()
+def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_node, epoch_metric, print_bar = False, model_graph = None, criterion_graph = None):
+    model_node.train()
+    model_graph.train()
     total_loss = 0
-    num_correct = 0
-    num_output = torch.zeros(size_edge)  # Already on CPU
-    num_labels = torch.zeros(size_edge)  # Already on CPU
+    total_loss_graph = 0
+    total_loss_node = 0
     total_graphs_processed = 0
-    global_cycles_created = 0
+    global_cycles_predicted= 0
+    global_num_wanted_cycles = 0
+    global_non_cycles_well_predicted = 0
+    global_cycles_well_predicted = 0
     global_well_placed_cycles = 0
     global_well_type_cycles = 0
-    global_cycles_missed = 0
-    global_cycles_shouldnt_created = 0
-    global_num_wanted_cycles = 0
 
-    if print_bar:
-        progress_bar = tqdm_notebook(loader, desc="Training", unit="batch")
-    else:
-        progress_bar = tqdm(loader, desc="Training", unit="batch")
+    progress_bar = tqdm(loader, desc="Training", unit="batch")
     
     for _, batch in enumerate(progress_bar):
         data = batch[0].to(device)
         node_labels = batch[1].to(device)
         mask = batch[2].to(device)
+        supposed_close_label = batch[3].to(device) #1 if we close a cycle 0 otherwise
         
         optimizer.zero_grad()
         
+        #gnn graph
+        close = model_graph(data)
+        close_output = torch.sigmoid(close)
+        supposed_close_label = supposed_close_label.unsqueeze(1)
+        loss_graph = criterion_graph(close_output, supposed_close_label)
+        loss_graph.backward()
+        total_loss_graph += loss_graph.item() * data.num_graphs
 
-        supposed_close = batch[3].to(device) #vaut 1 si on ferme un cycle et 0 sinon
-        close = model2(data)
-        close_sig = torch.sigmoid(close)
-        supposed_close = supposed_close.unsqueeze(1)
-        loss2 = criterion2(close_sig, supposed_close)
-        loss2.backward()
-            
-            #we combine the mask with the supposed_close, if a graph is supposed_closed all these nodes are added to the mask
-        supposed_close_extended = supposed_close.repeat_interleave(torch.bincount(data.batch))
-        mask = torch.logical_and(mask, supposed_close_extended)
+        #we combine the mask with the supposed_close, if a graph is supposed_closed (no cycle to make) all these nodes are added to the mask
+        supposed_close_label_extended = supposed_close_label.repeat_interleave(torch.bincount(data.batch))
+        mask = torch.logical_and(mask, supposed_close_label_extended)
 
-        
-        out = model(data)
-        prob_wich_link = F.softmax(out[:,:2], dim=1)
-        log_prob_wich_link = torch.log(prob_wich_link, dim = 1)
-        data.batch = data.batch[mask]
-        num_groups = data.batch.max() + 1
+        #node in the mask and who have their second value of vector equal to 1
+        node_where_closing_label = torch.logical_and(mask, node_labels[:,1] == 1)
 
-
-
-        # Calculer la somme des valeurs exponentielles par groupe d'indices
-        exp_sum_groups = torch.zeros(num_groups)
-        exp_values = torch.exp(out[:, 2])
-        exp_sum_groups.scatter_add_(0, data.batch, exp_values)
-
+        #gnn node
+        out = model_node(data)
+        prob_which_link = torch.sigmoid(out[:,0])
+        num_graph = data.batch.max() + 1
+        exp_sum_groups = torch.zeros(num_graph)
+        exp_values = torch.exp(out[:, 1])
+        exp_sum_groups.scatter_add_(0, data.batch, exp_values)        
         # Calculer les probabilités softmax par groupe d'indices
-        prob_wich_neighbor = exp_values / exp_sum_groups[data.batch]
-        log_prob_wich_neighbor = torch.log(prob_wich_neighbor,dim = 1)
+        prob_which_neighbour = exp_values / exp_sum_groups[data.batch]
 
         # Convert node_labels to class indices
-        log_softmax_output = torch.cat((log_prob_wich_link[mask], log_prob_wich_neighbor), dim=1)
         node_labels = node_labels.to(device)
         mask = mask.to(device)
 
         # Use node_labels_indices with CrossEntropyLoss but without 
-        loss = criterion(log_softmax_output, node_labels[mask])
+        loss_where = criterion_node(prob_which_neighbour[mask], node_labels[mask][1])
+        loss_which_type = criterion_node(prob_which_link[node_where_closing_label], node_labels[node_where_closing_label][0])
+        loss = loss_where + loss_which_type
     
         loss.backward()
         optimizer.step()
-
-        total_loss += loss.item() * data.num_graphs + loss2.item() * data.num_graphs
-        total_loss2 += loss2.item() * data.num_graphs
-        total_loss1 += loss.item() * data.num_graphs
-        # Add softmax to out
-        softmax_out = F.softmax(out, dim=1)
-
-        
+        total_loss_node += loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
+        total_loss += loss_graph.item() * data.num_graphs * data.num_graphs +loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
 
         if epoch_metric:
-
-            cycles_created, well_placed_cycles , well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles = pseudo_accuracy_metric_gnn3(
-                data.detach().cpu(), out.detach().cpu(), node_labels.detach().cpu(), mask.detach().cpu(), edge_size = size_edge)      
-            # Calculate metrics and move tensors to CPU
-            num_output += torch.sum(softmax_out[mask], dim=0).detach().cpu()
-            num_labels += torch.sum(node_labels[mask], dim=0).detach().cpu()
-            global_cycles_created +=cycles_created
-            global_well_placed_cycles += well_placed_cycles
-            global_well_type_cycles += well_type_cycles
-            global_cycles_missed += cycles_missed
-            global_cycles_shouldnt_created += cycles_shouldnt_created
-            global_num_wanted_cycles += num_wanted_cycles
-            
-            
-            loss_value = total_loss / (data.num_graphs * (progress_bar.last_print_n + 1))
+            num_wanted_cycles, cycles_predicted, not_cycles_well_predicted, cycles_well_predicted = metric_gnn3_bis_graph_level(data, close_output, supposed_close_label)
+            cycles_created_at_good_place, good_types_cycles_predicted = metric_gnn3_bis_if_cycle(data, prob_which_link, prob_which_neighbour, node_labels, supposed_close_label)
+ 
             total_graphs_processed += data.num_graphs
+            global_cycles_predicted += cycles_predicted
+            global_num_wanted_cycles += num_wanted_cycles
+            global_non_cycles_well_predicted += not_cycles_well_predicted
+            global_cycles_well_predicted += cycles_well_predicted
+            global_well_placed_cycles += cycles_created_at_good_place
+            global_well_type_cycles += good_types_cycles_predicted
             
-            denominator =global_cycles_created+global_cycles_shouldnt_created+global_num_wanted_cycles
-            if denominator == 0:
-                f1_score = 1
-            else:
-                f1_score = 2 * global_cycles_created / denominator
+            del cycles_predicted, num_wanted_cycles, not_cycles_well_predicted, cycles_well_predicted, cycles_created_at_good_place, good_types_cycles_predicted
+        
+        del data, node_labels, mask, supposed_close_label, node_where_closing_label, out, prob_which_link, num_graph, exp_sum_groups, exp_values, prob_which_neighbour
+        del loss_where, loss_which_type, loss, loss_graph, close_output, supposed_close_label_extended
 
-            if global_cycles_created == 0:
-                conditional_precision_placed = 1
-            else:
-                conditional_precision_placed = global_well_placed_cycles/(global_cycles_created)
 
-            del cycles_created, well_placed_cycles, well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles
-
-            if print_bar:
-                progress_bar.set_postfix(loss=loss_value, avg_num_output=num_output / total_graphs_processed, avg_num_labels=num_labels / total_graphs_processed,
-                pseudo_precision = global_cycles_created/(global_cycles_created+global_cycles_shouldnt_created),  pseudo_recall = global_cycles_created/global_num_wanted_cycles ,
-                pseudo_recall_placed = global_well_placed_cycles/global_num_wanted_cycles, pseudo_recall_type = global_well_type_cycles/global_num_wanted_cycles, 
-                conditional_precision_placed = conditional_precision_placed, f1_score = f1_score)
-    del data, node_labels, mask, out, softmax_out, loss
-    del supposed_close_extended, supposed_close, close, loss2
+    
+    accuracy_num_cycles = (global_cycles_well_predicted + global_non_cycles_well_predicted) / total_graphs_processed
+    precision_num_cycles = global_cycles_well_predicted/ global_cycles_predicted
+    recall_num_cycles = global_cycles_well_predicted/ global_num_wanted_cycles  
+    accuracy_neighhbor_chosen = global_well_placed_cycles / global_num_wanted_cycles
+    accuracy_type_chosen = global_well_type_cycles / global_num_wanted_cycles
+    f1_score_num_cycles = 2 * precision_num_cycles * recall_num_cycles / (precision_num_cycles + recall_num_cycles)
+    del global_cycles_predicted, global_num_wanted_cycles, global_non_cycles_well_predicted, global_cycles_well_predicted, global_well_placed_cycles, global_well_type_cycles
     if epoch_metric:
         return (
             total_loss / len(loader.dataset),
-            num_output / total_graphs_processed,
-            num_labels / total_graphs_processed, 
-            global_cycles_created/(global_cycles_created+global_cycles_shouldnt_created), 
-            global_cycles_created/global_num_wanted_cycles , 
-            global_well_placed_cycles/global_num_wanted_cycles, 
-            global_well_type_cycles/global_num_wanted_cycles,
-            conditional_precision_placed,
-            f1_score)
+            accuracy_num_cycles,
+            precision_num_cycles, 
+            recall_num_cycles, 
+            accuracy_neighhbor_chosen , 
+            accuracy_type_chosen, 
+            f1_score_num_cycles)
     
 
     else:
-        return total_loss / len(loader.dataset), None, None, None, None, None, None, None, None
+        return total_loss / len(loader.dataset), None, None, None, None, None, None
 
 
-def eval_one_epoch(loader, model, size_edge, device, criterion, print_bar=False, val_metric_size=1, model2=None, criterion2 = None):
-    model.eval()
-    model2.eval()
+def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_bar=False, val_metric_size=1, model_graph=None, criterion_graph = None):
+    model_node.eval()
+    model_graph.eval()
     total_loss = 0
-    num_correct = 0
-    num_output = torch.zeros(size_edge)  # Already on CPU
-    num_labels = torch.zeros(size_edge)  # Already on CPU
+    total_loss_graph = 0
+    total_loss_node = 0
     total_graphs_processed = 0
-    global_cycles_created = 0
+    global_cycles_predicted= 0
+    global_num_wanted_cycles = 0
+    global_non_cycles_well_predicted = 0
+    global_cycles_well_predicted = 0
     global_well_placed_cycles = 0
     global_well_type_cycles = 0
-    global_cycles_missed = 0
-    global_cycles_shouldnt_created = 0
-    global_num_wanted_cycles = 0
 
-    if print_bar:
-        progress_bar = tqdm_notebook(loader, desc="Evaluating", unit="batch")
-    else:
-        progress_bar = tqdm(loader, desc="Evaluating", unit="batch")
-
-    for i in tqdm(range(val_metric_size)):
-
-        with torch.no_grad():
-            for _, batch in enumerate(progress_bar):
-                data = batch[0].to(device)
-                node_labels = batch[1].to(device)
-                mask = batch[2].to(device)
-
-
-                supposed_close = batch[3].to(device)
-                close = model2(data)
-                close_sig = torch.sigmoid(close)
-                supposed_close = supposed_close.unsqueeze(1)
-                loss2 = criterion2(close_sig, supposed_close)
-        
-                #we combine the mask with the supposed_close, if a graph is supposed_closed all these nodes are added to the mask
-                supposed_close_extended = supposed_close.repeat_interleave(torch.bincount(data.batch))
-                mask = torch.logical_and(mask, supposed_close_extended)
-                    
-
-                out = model(data)
-
-                node_labels = node_labels.to(device)
-                mask = mask.to(device)
-
-                loss = criterion(out[mask], node_labels[mask])
-
-                # Add softmax to out
-                softmax_out = F.softmax(out, dim=1)
-
-                cycles_created, well_placed_cycles, well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles = pseudo_accuracy_metric_gnn3(
-                data.detach().cpu(), out.detach().cpu(), node_labels.detach().cpu(), mask.detach().cpu(), edge_size = size_edge) 
-
-                num_output += torch.sum(softmax_out[mask], dim=0).detach().cpu()
-                num_labels += torch.sum(node_labels[mask], dim=0).detach().cpu()
-                global_cycles_created += cycles_created
-                global_well_placed_cycles += well_placed_cycles
-                global_well_type_cycles += well_type_cycles
-                global_cycles_missed += cycles_missed
-                global_cycles_shouldnt_created += cycles_shouldnt_created
-                global_num_wanted_cycles += num_wanted_cycles
-
-                total_loss += (loss.item() + loss2.item()) * data.num_graphs
-
-                total_graphs_processed += data.num_graphs
-    del loss, data, node_labels, mask, out
-    del supposed_close_extended, supposed_close, close, loss2
-
-    denominator = global_cycles_created + global_cycles_shouldnt_created + global_num_wanted_cycles
-    if denominator == 0:
-        f1_score = 1
-    else:
-        f1_score = 2 * global_cycles_created / denominator
-
-    if global_cycles_created == 0:
-        conditional_precision_placed = 1
-    else:
-        conditional_precision_placed = global_well_placed_cycles / (global_cycles_created)
-    del softmax_out, cycles_created, well_placed_cycles, well_type_cycles, cycles_missed, cycles_shouldnt_created, num_wanted_cycles, denominator
+    progress_bar = tqdm(loader, desc="Training", unit="batch")
     
+    for _, batch in enumerate(progress_bar):
+        data = batch[0].to(device)
+        node_labels = batch[1].to(device)
+        mask = batch[2].to(device)
+        supposed_close_label = batch[3].to(device) #1 if we close a cycle 0 otherwise
+                
+        #gnn graph
+        close = model_graph(data)
+        close_output = torch.sigmoid(close)
+        supposed_close_label = supposed_close_label.unsqueeze(1)
+        loss_graph = criterion_graph(close_output, supposed_close_label)
+        loss_graph.backward()
+        total_loss_graph += loss_graph.item() * data.num_graphs
+
+
+            
+        #we combine the mask with the supposed_close, if a graph is supposed_closed (no cycle to make) all these nodes are added to the mask
+        supposed_close_label_extended = supposed_close_label.repeat_interleave(torch.bincount(data.batch))
+        mask = torch.logical_and(mask, supposed_close_label_extended)
+
+        #node in the mask and who have their second value of vector equal to 1
+        node_where_closing_label = torch.logical_and(mask, node_labels[:,1] == 1)
+
+        #gnn node
+        out = model_node(data)
+        prob_which_link = torch.sigmoid(out[:,0])
+        num_graph = data.batch.max() + 1
+        exp_sum_groups = torch.zeros(num_graph)
+        exp_values = torch.exp(out[:, 1])
+        exp_sum_groups.scatter_add_(0, data.batch, exp_values)        
+        # Calculer les probabilités softmax par groupe d'indices
+        prob_which_neighbour = exp_values / exp_sum_groups[data.batch]
+
+        # Convert node_labels to class indices
+        node_labels = node_labels.to(device)
+        mask = mask.to(device)
+
+        # Use node_labels_indices with CrossEntropyLoss but without 
+        loss_where = criterion_node(prob_which_neighbour[mask], node_labels[mask][1])
+        loss_which_type = criterion_node(prob_which_link[node_where_closing_label], node_labels[node_where_closing_label][0])
+
+        total_loss_node += loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
+        total_loss += loss_graph.item() * data.num_graphs * data.num_graphs +loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
+        # Add softmax to out
+       
+        num_wanted_cycles, cycles_predicted, not_cycles_well_predicted, cycles_well_predicted = metric_gnn3_bis_graph_level(data, close_output, supposed_close_label)
+        cycles_created_at_good_place, good_types_cycles_predicted = metric_gnn3_bis_if_cycle(data, prob_which_link, prob_which_neighbour, node_labels, supposed_close_label)
+
+        total_graphs_processed += data.num_graphs
+        global_cycles_predicted += cycles_predicted
+        global_num_wanted_cycles += num_wanted_cycles
+        global_non_cycles_well_predicted += not_cycles_well_predicted
+        global_cycles_well_predicted += cycles_well_predicted
+        global_well_placed_cycles += cycles_created_at_good_place
+        global_well_type_cycles += good_types_cycles_predicted
+        
+        del cycles_predicted, num_wanted_cycles, not_cycles_well_predicted, cycles_well_predicted, cycles_created_at_good_place, good_types_cycles_predicted
+        
+        del data, node_labels, mask, supposed_close_label, node_where_closing_label, out, prob_which_link, num_graph, exp_sum_groups, exp_values, prob_which_neighbour
+        del loss_where, loss_which_type, loss, loss_graph, close_output, supposed_close_label_extended
+
+
+    
+    accuracy_num_cycles = (global_cycles_well_predicted + global_non_cycles_well_predicted) / total_graphs_processed
+    precision_num_cycles = global_cycles_well_predicted/ global_cycles_predicted
+    recall_num_cycles = global_cycles_well_predicted/ global_num_wanted_cycles  
+    accuracy_neighhbor_chosen = global_well_placed_cycles / global_num_wanted_cycles
+    accuracy_type_chosen = global_well_type_cycles / global_num_wanted_cycles
+    f1_score_num_cycles = 2 * precision_num_cycles * recall_num_cycles / (precision_num_cycles + recall_num_cycles)
+    del global_cycles_predicted, global_num_wanted_cycles, global_non_cycles_well_predicted, global_cycles_well_predicted, global_well_placed_cycles, global_well_type_cycles
+
     return (
-        total_loss / (len(loader.dataset) * val_metric_size),
-        num_output / total_graphs_processed,
-        num_labels / total_graphs_processed,
-        global_cycles_created / (global_cycles_created + global_cycles_shouldnt_created),
-        global_cycles_created / global_num_wanted_cycles,
-        global_well_placed_cycles / global_num_wanted_cycles,
-        global_well_type_cycles / global_num_wanted_cycles,
-        conditional_precision_placed,
-        f1_score)
+            total_loss / len(loader.dataset),
+            accuracy_num_cycles,
+            precision_num_cycles, 
+            recall_num_cycles, 
+            accuracy_neighhbor_chosen , 
+            accuracy_type_chosen, 
+            f1_score_num_cycles)
 
 
 
@@ -290,22 +268,22 @@ class TrainGNN3_bis():
         self.continue_training = continue_training
 
         print(f"Loading data...")
-        self.loader_train, self.loader_val, self.model, self.encoding_size, self.edge_size,self.model2 = self.load_data_model()
+        self.loader_train, self.loader_val, self.model_node, self.encoding_size, self.edge_size,self.model_graph = self.load_data_model()
         print(f"Data loaded")
         self.begin_epoch = 0
 
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+        self.optimizer = torch.optim.Adam(self.model_node.parameters(), lr=self.lr)
         if self.continue_training:
-            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.model_node.load_state_dict(checkpoint['model_node_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             self.begin_epoch = checkpoint['epoch']
 
         #cross entropy loss without softmax
-        self.criterion = nn.NLLLoss()
-        self.criterion2 = nn.BCELoss()
+        self.criterion_node = nn.BCELoss()
+        self.criterion_graph = nn.BCELoss()
 
-        self.training_history = pd.DataFrame(columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector','pseudo_precision', 'pseudo_recall' , 'pseudo_recall_placed', 'pseudo_recall_type','conditionnal_precision_placed', 'f1_score'])
-        self.eval_history = pd.DataFrame(columns=['epoch', 'loss', 'avg_output_vector', 'avg_label_vector','pseudo_precision', 'pseudo_recall' , 'pseudo_recall_placed', 'pseudo_recall_type','conditionnal_precision_placed', 'f1_score'])
+        self.training_history = pd.DataFrame(columns=['epoch', 'loss', 'accuracy_num_cycles', 'precision_num_cycles', 'recall_num_cycles', 'accuracy_neighhbor_chosen' , 'accuracy_type_chosen', 'f1_score_num_cycles'])
+        self.eval_history = pd.DataFrame(columns=['epoch', 'loss', 'accuracy_num_cycles', 'precision_num_cycles', 'recall_num_cycles', 'accuracy_neighhbor_chosen' , 'accuracy_type_chosen', 'f1_score_num_cycles'])
 
         self.prepare_saving()
 
@@ -337,7 +315,7 @@ class TrainGNN3_bis():
         # Load the model
             
         if self.node_embedding_for_second_part:
-            model2 = ModelWithgraph_embedding_close_or_not_with_node_embedding(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
+            model_graph = ModelWithgraph_embedding_close_or_not_with_node_embedding(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
                                         hidden_channels_list=self.GCN_size,
                                         mlp_hidden_channels=self.mlp_hidden,
                                         edge_channels=edge_size,
@@ -347,7 +325,7 @@ class TrainGNN3_bis():
                                         max_size=self.max_size,
                                         encoding_size=encoding_size)
         else :
-            model2 =ModelWithgraph_embedding_close_or_not_without_node_embedding(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
+            model_graph =ModelWithgraph_embedding_close_or_not_without_node_embedding(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
                                         hidden_channels_list=self.GCN_size,
                                         mlp_hidden_channels=self.mlp_hidden,
                                         edge_channels=edge_size,
@@ -357,18 +335,18 @@ class TrainGNN3_bis():
                                         max_size=self.max_size,
                                         encoding_size=encoding_size)
             
-        model = ModelWithgraph_embedding_modif(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
+        model_node = ModelWithgraph_embedding_modif(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
                                         hidden_channels_list=self.GCN_size,
                                         mlp_hidden_channels=self.mlp_hidden,
                                         edge_channels=edge_size, 
-                                        num_classes=edge_size , #close with a simple double and which one to close
+                                        num_classes=edge_size -1, #close with a simple double and which one to close just size 2
                                         use_dropout=self.use_dropout,
                                         size_info=self.size_info,
                                         max_size=self.max_size)
 
 
         
-        return loader_train, loader_val, model.to(self.device), encoding_size, edge_size, model2.to(self.device)
+        return loader_train, loader_val, model_node.to(self.device), encoding_size, edge_size, model_graph.to(self.device)
     
     def prepare_saving(self):
         self.directory_path_experience = os.path.join("./experiments", self.name)
@@ -404,32 +382,32 @@ class TrainGNN3_bis():
             torch.cuda.empty_cache()
             save_epoch = False
             if epoch % self.every_epoch_metric == 0:
-                loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score = train_one_epoch(
+                loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles= train_one_epoch(
                     loader=self.loader_train,
-                    model=self.model,
+                    model_node=self.model_node,
                     size_edge=self.edge_size,
                     device=self.device,
                     optimizer=self.optimizer,
                     epoch_metric = True,
-                    criterion=self.criterion,
+                    criterion_node=self.criterion_node,
                     print_bar = self.print_bar,
-                    model2 = self.model2,
-                    criterion2=self.criterion2)
+                    model_graph = self.model_graph,
+                    criterion_graph=self.criterion_graph)
                 
-                self.training_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score]
+                self.training_history.loc[epoch] = [epoch, loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles]
 
-                loss, avg_output_vector, avg_label_vector,  pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score = eval_one_epoch(
+                loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles = eval_one_epoch(
                     loader=self.loader_val,
-                    model=self.model,
+                    model_node=self.model_node,
                     size_edge=self.edge_size,
                     device=self.device,
-                    criterion=self.criterion,
+                    criterion_node=self.criterion_node,
                     print_bar = self.print_bar,
                     val_metric_size = self.val_metric_size,
-                    model2 = self.model2,
-                    criterion2=self.criterion2)
+                    model_graph = self.model_graph,
+                    criterion_graph=self.criterion_graph)
                 
-                self.eval_history.loc[epoch] = [epoch, loss, avg_output_vector, avg_label_vector, pseudo_precision, pseudo_recall , pseudo_recall_placed, pseudo_recall_type, conditionnal_precision_placed, f1_score]
+                self.eval_history.loc[epoch] = [epoch,loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles]
                 
                 # Check if the loss is better than one of the 6 best losses (compare only along the second dimension of the tuples)
 
@@ -440,26 +418,26 @@ class TrainGNN3_bis():
                     self.six_best_eval_loss[index_max] = (epoch, loss)
             
             else:
-                loss, _, _, _, _, _, _, _, _ = train_one_epoch(
+                loss, _, _, _, _, _, _,  = train_one_epoch(
                     loader=self.loader_train,
-                    model=self.model,
+                    model_node=self.model_node,
                     size_edge=self.edge_size,
                     device=self.device,
                     optimizer=self.optimizer,
                     epoch_metric = False,
-                    criterion=self.criterion,
+                    criterion_node=self.criterion_node,
                     print_bar = self.print_bar,
-                    model2 = self.model2,
-                    criterion2=self.criterion2)
+                    model_graph = self.model_graph,
+                    criterion_graph=self.criterion_graph)
                 
-                self.training_history.loc[epoch] = [epoch, loss, None, None, None, None, None, None, None, None]
-                self.eval_history.loc[epoch] = [epoch, None, None, None, None, None, None, None, None, None]
+                self.training_history.loc[epoch] = [epoch, loss, None, None, None, None, None, None]
+                self.eval_history.loc[epoch] = [epoch, None, None, None, None, None, None, None]
 
             if save_epoch:
                 checkpoint = {
                     'epoch': epoch,
-                    'model_state_dict': self.model.state_dict(),
-                    'model2_state_dict': self.model2.state_dict(),
+                    'model_node_state_dict': self.model_node.state_dict(),
+                    'model_graph_state_dict': self.model_graph.state_dict(),
                     'optimizer_state_dict': self.optimizer.state_dict()}
 
                 epoch_save_file = os.path.join(self.directory_path_epochs, f'checkpoint_{index_max}.pt')
