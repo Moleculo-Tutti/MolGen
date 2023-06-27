@@ -92,7 +92,9 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
 
 
             # Use node_labels_indices with CrossEntropyLoss but without 
-            loss_where = criterion_node_softmax(log_prob_which_neighbour, node_labels[mask,1])
+            labels_where = node_labels[mask, 1]
+            labels_where = labels_where.long()
+            loss_where = criterion_node_softmax(log_prob_which_neighbour, labels_where)
             loss_which_type = criterion_node(out_which_link[node_where_closing_label], node_labels[node_where_closing_label,0])
             loss = loss_where + loss_which_type
         
@@ -123,7 +125,7 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
             del cycles_predicted, num_wanted_cycles, not_cycles_well_predicted, cycles_well_predicted, cycles_created_at_good_place, good_types_cycles_predicted
         
         del data, node_labels, mask, supposed_close_label, node_where_closing_label, out, prob_which_link, num_graph, exp_sum_groups, exp_values, prob_which_neighbour
-        del loss_where, loss_which_type, loss , loss_graph, supposed_close_label_extended, out_which_link, close_sig, close, log_prob_which_neighbour
+        del loss_where, loss_which_type, loss , loss_graph, supposed_close_label_extended, out_which_link, close_sig, close, log_prob_which_neighbour, labels_where
 
 
     if (total_graphs_processed == 0):
@@ -209,7 +211,8 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
             log_prob_which_neighbour = torch.log(prob_which_neighbour[mask])
 
             # Use node_labels_indices with CrossEntropyLoss but without 
-            loss_where = criterion_node_softmax(log_prob_which_neighbour, node_labels[mask,1])
+            labels_where = node_labels[mask,1].long()
+            loss_where = criterion_node_softmax(log_prob_which_neighbour, labels_where)
             loss_which_type = criterion_node(out_which_link[node_where_closing_label], node_labels[node_where_closing_label,0])
 
             total_loss_node += loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
@@ -230,7 +233,7 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
             del cycles_predicted, num_wanted_cycles, not_cycles_well_predicted, cycles_well_predicted, cycles_created_at_good_place, good_types_cycles_predicted
             
             del data, node_labels, mask, supposed_close_label, node_where_closing_label, out, prob_which_link, num_graph, exp_sum_groups, exp_values, prob_which_neighbour
-            del loss_where, loss_which_type, loss_graph, supposed_close_label_extended, out_which_link, close, close_sig, log_prob_which_neighbour
+            del loss_where, loss_which_type, loss_graph, supposed_close_label_extended, out_which_link, close, close_sig, log_prob_which_neighbour, labels_where
 
 
     if (total_graphs_processed == 0):
