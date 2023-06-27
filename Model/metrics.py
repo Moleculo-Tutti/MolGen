@@ -21,20 +21,22 @@ def pseudo_accuracy_metric(model_output, target, random = False):
     del model_output, target
     return correct
 
-def metric_gnn3_bis_graph_level(model_input, model2_output, supposed_closed_target):
+def metric_gnn3_bis_graph_level(model_input, model2_output, supposed_closed_target, device):
     num_wanted_cycles = 0
     cycles_well_predicted = 0
     cycles_predicted = 0
     not_cycles_well_predicted = 0
+    proba = torch.rand(model_input.num_graphs, device= device)
+    prediction = torch.where(proba < model2_output, torch.tensor(1, device=device), torch.tensor(0, device=device))
     for i in range(model_input.num_graphs):
         if supposed_closed_target[i] == 1:
             num_wanted_cycles += 1
-            if model2_output[i] == 1:
+            if prediction[i] == 1:
                 cycles_well_predicted += 1
         else:
-            if model2_output[i] == 0 :
+            if prediction[i] == 0 :
                 not_cycles_well_predicted += 1
-        if model2_output[i] == 1:
+        if prediction[i] == 1:
                 cycles_predicted += 1
     return num_wanted_cycles, cycles_predicted, not_cycles_well_predicted, cycles_well_predicted
 
