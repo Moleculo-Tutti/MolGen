@@ -399,6 +399,7 @@ class TrainGNN3_bis():
         
         while index_iter <= max_iteration:
             torch.cuda.empty_cache()
+            epoch = index_iter + self.begin_epoch
             save_epoch = False
             try :
                 index_iter +=1
