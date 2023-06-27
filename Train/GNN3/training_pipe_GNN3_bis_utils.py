@@ -398,10 +398,10 @@ class TrainGNN3_bis():
         progress_bar = tqdm(total=max_iteration)
         
         while index_iter <= max_iteration:
-            torch.cuda.empty_cache()
-            epoch = index_iter + self.begin_epoch
-            save_epoch = False
             try :
+                torch.cuda.empty_cache()
+                epoch = index_iter + self.begin_epoch
+                save_epoch = False
                 index_iter +=1
                 progress_bar.update(1)
                 if epoch % self.every_epoch_metric == 0:
