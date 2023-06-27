@@ -302,8 +302,8 @@ class TrainGNN3_bis():
     def load_data_model(self):
         # Load the data
         
-        dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=3.5, feature_position=self.feature_position, scores_list=self.score_list)
-        dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=3.5, feature_position=self.feature_position, scores_list=self.score_list)
+        dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=4, feature_position=self.feature_position, scores_list=self.score_list)
+        dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=4, feature_position=self.feature_position, scores_list=self.score_list)
 
         loader_train = DataLoader(dataset_train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers, collate_fn=custom_collate_GNN3_bis)
         loader_val = DataLoader(dataset_val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers, collate_fn=custom_collate_GNN3_bis)
