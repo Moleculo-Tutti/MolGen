@@ -65,36 +65,45 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         close = model_graph(data)
         close_output = torch.sigmoid(close)
         supposed_close_label = supposed_close_label.unsqueeze(1)
-        loss_graph = criterion_graph(close_output, supposed_close_label)
-        loss_graph.backward()
-        total_loss_graph += loss_graph.item() * data.num_graphs
 
-        #we combine the mask with the supposed_close, if a graph is supposed_closed (no cycle to make) all these nodes are added to the mask
-        supposed_close_label_extended = supposed_close_label.repeat_interleave(torch.bincount(data.batch))
-        mask = torch.logical_and(mask, supposed_close_label_extended)
+        try:
+            loss_graph = criterion_graph(close_output, supposed_close_label)
+            loss_graph.backward()
+            total_loss_graph += loss_graph.item() * data.num_graphs
 
-        #node in the mask and who have their second value of vector equal to 1
-        node_where_closing_label = torch.logical_and(mask, node_labels[:,1] == 1)
+            #we combine the mask with the supposed_close, if a graph is supposed_closed (no cycle to make) all these nodes are added to the mask
+            supposed_close_label_extended = supposed_close_label.repeat_interleave(torch.bincount(data.batch))
+            mask = torch.logical_and(mask, supposed_close_label_extended)
 
-        #gnn node
-        out = model_node(data)
-        prob_which_link = torch.sigmoid(out[:,0])
-        num_graph = data.batch.max() + 1
-        exp_sum_groups = torch.zeros(num_graph, device=device)
-        exp_values = torch.exp(out[:, 1])
-        exp_sum_groups.scatter_add_(0, data.batch, exp_values)        
-        # Calculer les probabilités softmax par groupe d'indices
-        prob_which_neighbour = exp_values / exp_sum_groups[data.batch]
+            #node in the mask and who have their second value of vector equal to 1
+            node_where_closing_label = torch.logical_and(mask, node_labels[:,1] == 1)
 
-        # Use node_labels_indices with CrossEntropyLoss but without 
-        loss_where = criterion_node(prob_which_neighbour[mask], node_labels[mask,1])
-        loss_which_type = criterion_node(prob_which_link[node_where_closing_label], node_labels[node_where_closing_label,0])
-        loss = loss_where + loss_which_type
-    
-        loss.backward()
-        optimizer.step()
-        total_loss_node += loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
-        total_loss += loss_graph.item() * data.num_graphs * data.num_graphs +loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
+            #gnn node
+            out = model_node(data)
+            prob_which_link = torch.sigmoid(out[:,0])
+            num_graph = data.batch.max() + 1
+            exp_sum_groups = torch.zeros(num_graph, device=device)
+            exp_values = torch.exp(out[:, 1])
+            exp_sum_groups.scatter_add_(0, data.batch, exp_values)        
+            # Calculer les probabilités softmax par groupe d'indices
+            prob_which_neighbour = exp_values / exp_sum_groups[data.batch]
+
+            # Use node_labels_indices with CrossEntropyLoss but without 
+            loss_where = criterion_node(prob_which_neighbour[mask], node_labels[mask,1])
+            loss_which_type = criterion_node(prob_which_link[node_where_closing_label], node_labels[node_where_closing_label,0])
+            loss = loss_where + loss_which_type
+        
+            loss.backward()
+            optimizer.step()
+            total_loss_node += loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
+            total_loss += loss_graph.item() * data.num_graphs * data.num_graphs +loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
+        except Exception as e:
+            # Generic handler for any other exception
+            print('model1_output', close_output)
+            print('model2_output', out)
+            print('sigmoid_ouput', prob_which_link)
+            print('softmax_output', prob_which_neighbour)
+            print("An error occurred:", str(e))
 
         if epoch_metric:
             num_wanted_cycles, cycles_predicted, not_cycles_well_predicted, cycles_well_predicted = metric_gnn3_bis_graph_level(data, close_output, supposed_close_label, device=device)
@@ -176,7 +185,7 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
             total_loss_graph += loss_graph.item() * data.num_graphs
 
 
-                
+            
             #we combine the mask with the supposed_close, if a graph is supposed_closed (no cycle to make) all these nodes are added to the mask
             supposed_close_label_extended = supposed_close_label.repeat_interleave(torch.bincount(data.batch))
             mask = torch.logical_and(mask, supposed_close_label_extended)
