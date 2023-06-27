@@ -125,7 +125,10 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
     recall_num_cycles = global_cycles_well_predicted/ global_num_wanted_cycles  
     accuracy_neighhbor_chosen = global_well_placed_cycles / global_num_wanted_cycles
     accuracy_type_chosen = global_well_type_cycles / global_num_wanted_cycles
-    f1_score_num_cycles = 2 * precision_num_cycles * recall_num_cycles / (precision_num_cycles + recall_num_cycles)
+    if (precision_num_cycles + recall_num_cycles) == 0:
+        f1_score_num_cycles = 0
+    else:
+        f1_score_num_cycles = 2 * precision_num_cycles * recall_num_cycles / (precision_num_cycles + recall_num_cycles)
     del global_cycles_predicted, global_num_wanted_cycles, global_non_cycles_well_predicted, global_cycles_well_predicted, global_well_placed_cycles, global_well_type_cycles, total_graphs_processed
     if epoch_metric: 
         return (
