@@ -91,6 +91,7 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         mask = mask.to(device)
 
         # Use node_labels_indices with CrossEntropyLoss but without 
+        print(prob_which_neighbour[mask].size, node_labels[mask][1].size)
         loss_where = criterion_node(prob_which_neighbour[mask], node_labels[mask][1])
         loss_which_type = criterion_node(prob_which_link[node_where_closing_label], node_labels[node_where_closing_label][0])
         loss = loss_where + loss_which_type
