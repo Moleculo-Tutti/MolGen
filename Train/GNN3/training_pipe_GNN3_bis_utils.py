@@ -87,12 +87,12 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         prob_which_neighbour = exp_values / exp_sum_groups[data.batch]
 
 
-        print('prob_which_neighbour with mask', prob_which_neighbour[mask].size)
-        print('prob_which_neighbour', prob_which_neighbour.size)
-        print('node_labels  ask', node_labels.size)
-        print('node_labels1 with mask', node_labels[mask].size)
-        print('node_labels1', node_labels[mask,1].size)
-        print('node_labels', node_labels[mask][1].size)
+        print('prob_which_neighbour with mask', prob_which_neighbour[mask].size())
+        print('prob_which_neighbour', prob_which_neighbour.size())
+        print('node_labels  ask', node_labels.size())
+        print('node_labels1 with mask', node_labels[mask].size())
+        print('node_labels1', node_labels[mask,1].size())
+        print('node_labels', node_labels[mask][1].size())
 
         # Use node_labels_indices with CrossEntropyLoss but without 
         loss_where = criterion_node(prob_which_neighbour[mask], node_labels[mask][1])
