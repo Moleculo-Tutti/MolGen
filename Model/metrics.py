@@ -27,6 +27,7 @@ def metric_gnn3_bis_graph_level(model_input, model2_output, supposed_closed_targ
     cycles_predicted = 0
     not_cycles_well_predicted = 0
     proba = torch.rand(model_input.num_graphs, device= device)
+    model2_output = model2_output.squeeze()
     prediction = torch.where(proba < model2_output, torch.tensor(1, device=device), torch.tensor(0, device=device))
     for i in range(model_input.num_graphs):
         if supposed_closed_target[i] == 1:
@@ -38,6 +39,7 @@ def metric_gnn3_bis_graph_level(model_input, model2_output, supposed_closed_targ
                 not_cycles_well_predicted += 1
         if prediction[i] == 1:
                 cycles_predicted += 1
+    del prediction, proba
     return num_wanted_cycles, cycles_predicted, not_cycles_well_predicted, cycles_well_predicted
 
 def metric_gnn3_bis_if_cycle(model_input, prob_which_link, prob_which_neighbour, target, supposed_closed_target, device):
