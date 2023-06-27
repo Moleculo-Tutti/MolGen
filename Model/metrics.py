@@ -60,10 +60,7 @@ def metric_gnn3_bis_if_cycle(model_input, prob_which_link, prob_which_neighbour,
             index_chosen = torch.multinomial(prob_which_neighbour[start_index:end_index],1)
             if index_chosen ==  index_of_interest[0]:
                 cycles_created_at_good_place += 1
-                print('print1',prob_which_link[start_index:end_index])
-                print('index chosen : ', index_chosen)
-                print('print tensor chosen',prob_which_link[start_index:end_index][index_chosen])
-                p = (prob_which_link[start_index:end_index][index_chosen,0])
+                p = (prob_which_link[start_index:end_index][index_chosen])
                 proba = torch.rand(1)
                 if proba < p:
                     prediction = 1
