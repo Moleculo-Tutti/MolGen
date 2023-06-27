@@ -1,5 +1,5 @@
 {
-    "name": "GNN3_split_two_with_node_embedding",
+    "name": "GNN3_split_two_with_node_embedding_debugging2",
     "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_charged_kekulized_scores.pt",
     "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_charged_kekulized_scores.pt",
     "n_epochs": 3000,
