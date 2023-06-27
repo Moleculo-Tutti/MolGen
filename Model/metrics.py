@@ -38,7 +38,7 @@ def metric_gnn3_bis_graph_level(model_input, model2_output, supposed_closed_targ
                 cycles_predicted += 1
     return num_wanted_cycles, cycles_predicted, not_cycles_well_predicted, cycles_well_predicted
 
-def metric_gnn3_bis_if_cycle(model_input, prob_which_link, prob_which_neighbour, target, supposed_closed_target):
+def metric_gnn3_bis_if_cycle(model_input, prob_which_link, prob_which_neighbour, target, supposed_closed_target, device):
     #the mask are already done before 
     num_cycles = 0 
     cycles_created_at_good_place = 0
@@ -61,11 +61,11 @@ def metric_gnn3_bis_if_cycle(model_input, prob_which_link, prob_which_neighbour,
             if index_chosen ==  index_of_interest[0]:
                 cycles_created_at_good_place += 1
                 p = (prob_which_link[start_index:end_index][index_chosen])
-                proba = torch.rand(1)
+                proba = torch.rand(1, device =device)
                 if proba < p:
-                    prediction = 1
+                    prediction = torch.tensor(1, device = device)
                 else:
-                    prediction = 0
+                    prediction = torch.tensor(0, device = device)
                 if prediction == current_graph_target[index_of_interest,0]:
                     good_types_cycles_predicted += 1
     del index_of_interest, index_chosen, current_graph_target, p, prediction, proba

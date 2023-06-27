@@ -98,7 +98,7 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
 
         if epoch_metric:
             num_wanted_cycles, cycles_predicted, not_cycles_well_predicted, cycles_well_predicted = metric_gnn3_bis_graph_level(data, close_output, supposed_close_label)
-            cycles_created_at_good_place, good_types_cycles_predicted = metric_gnn3_bis_if_cycle(data, prob_which_link, prob_which_neighbour, node_labels, supposed_close_label)
+            cycles_created_at_good_place, good_types_cycles_predicted = metric_gnn3_bis_if_cycle(data, prob_which_link, prob_which_neighbour, node_labels, supposed_close_label, device=device)
  
             total_graphs_processed += data.num_graphs
             global_cycles_predicted += cycles_predicted
@@ -195,7 +195,7 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
         # Add softmax to out
        
         num_wanted_cycles, cycles_predicted, not_cycles_well_predicted, cycles_well_predicted = metric_gnn3_bis_graph_level(data, close_output, supposed_close_label)
-        cycles_created_at_good_place, good_types_cycles_predicted = metric_gnn3_bis_if_cycle(data, prob_which_link, prob_which_neighbour, node_labels, supposed_close_label)
+        cycles_created_at_good_place, good_types_cycles_predicted = metric_gnn3_bis_if_cycle(data, prob_which_link, prob_which_neighbour, node_labels, supposed_close_label, device=device)
 
         total_graphs_processed += data.num_graphs
         global_cycles_predicted += cycles_predicted
