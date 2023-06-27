@@ -97,9 +97,11 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
             loss_where = criterion_node_softmax(log_prob_which_neighbour, labels_where)
             loss_which_type = criterion_node(out_which_link[node_where_closing_label], node_labels[node_where_closing_label,0])
             loss = loss_where + loss_which_type
-        
-            loss.backward()
-            optimizer.step()
+            try:
+                loss.backward()
+                optimizer.step()
+            except RuntimeError as e:
+                print('error raised : ',e )
             total_loss_node += loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
             total_loss += loss_graph.item() * data.num_graphs * data.num_graphs +loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
         except Exception as e:
