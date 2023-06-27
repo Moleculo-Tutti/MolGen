@@ -157,7 +157,7 @@ class ZincSubgraphDatasetStep(Dataset):
             subgraph.edge_attr = torch.cat([subgraph.edge_attr, edge_neighbor_attr.unsqueeze(0), edge_neighbor_attr.unsqueeze(0)], dim=0)
 
 
-            node_features_label = torch.zeros(len(subgraph.x), self.edge_size) #there is no triple bond for closing the cycle
+            
 
             # put ones in the last column of the node_features_label for the terminal node (put stop everywhere)
 
@@ -183,6 +183,7 @@ class ZincSubgraphDatasetStep(Dataset):
                     subgraph.x = torch.cat([subgraph.x, score_tensor], dim=-1)
             
             if self.GNN_type == 3:
+                node_features_label = torch.zeros(len(subgraph.x), self.edge_size) #there is no triple bond for closing the cycle
                 node_features_label[:, -1] = 1
 
                 if len(terminal_nodes[1][id_chosen][3]) != 0:
@@ -191,10 +192,12 @@ class ZincSubgraphDatasetStep(Dataset):
                         node_features_label[id_map[cycle_neighbor[0]]][-1] = 0
             
             if self.GNN_type == 4:
+                node_features_label = torch.zeros(len(subgraph.x), self.edge_size-1) #there is just two dim
                 if len(terminal_nodes[1][id_chosen][3]) != 0:
                     closed_cycle = torch.tensor(1.).unsqueeze(0)
                     for cycle_neighbor in terminal_nodes[1][id_chosen][3]:
-                        node_features_label[id_map[cycle_neighbor[0]]][:self.edge_size - 1] = cycle_neighbor[1][:self.edge_size - 1]
+                        if cycle_neighbor[1][1] == 1 :#close by a double bond if 0 means it closed byc a single bond
+                            node_features_label[id_map[cycle_neighbor[0]]][0] = 1 
                         node_features_label[id_map[cycle_neighbor[0]]][-1] = 1 # we put a one to indicate that the cycle is closed
 
             
