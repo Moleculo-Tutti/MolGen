@@ -178,6 +178,14 @@ def extract_all_graphs(batch):
 
         # Extract all the edges that correspond to the i-th graph
         edge_mask = mask[batch.edge_index[0]] & mask[batch.edge_index[1]]
+
+        if edge_mask.sum() == 0:
+            print(edge_mask)
+            print(batch.edge_index)
+            
+            raise ValueError('Graph with no edges')
+        
+        
         subgraph_edge_index = torch.tensor(mapping_func(batch.edge_index[:, edge_mask].cpu().numpy()), dtype=torch.long)
 
         # Extract all the edge features that correspond to the i-th graph
