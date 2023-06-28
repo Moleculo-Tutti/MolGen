@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch_geometric.nn import MessagePassing, global_add_pool
 from torch_geometric.utils import add_self_loops
 
+
 class CustomMessagePassingLayerOld(MessagePassing):
     def __init__(self, in_channels, out_channels, edge_channels):
         super(CustomMessagePassingLayerOld, self).__init__(aggr='add')
