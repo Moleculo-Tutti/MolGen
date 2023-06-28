@@ -55,9 +55,10 @@ def metric_gnn3_bis_if_cycle_actualized(prob_which_link, list_logits_which_neigh
     good_types_cycles_predicted = good_types_cycles_predicted.item()
     for i,tensor in enumerate(list_logits_which_neighbour):
         proba = torch.softmax(tensor, dim = 0)
-        prediction = torch.multinomial(proba, 1)
-        if prediction == torch.argmax(target_restricted_neighbour[i]):
-            cycles_created_at_good_place += 1
+        if proba.size(0) != 0:
+            prediction = torch.multinomial(proba, 1)
+            if prediction == torch.argmax(target_restricted_neighbour[i]):
+                cycles_created_at_good_place += 1
 
     return cycles_created_at_good_place, good_types_cycles_predicted
 
