@@ -37,7 +37,7 @@ from Model.GNN3 import  ModelWithgraph_embedding_modif, ModelWithgraph_embedding
 from Model.metrics import  metric_gnn3_bis_graph_level, metric_gnn3_bis_if_cycle, metric_gnn3_bis_if_cycle_actualized
 
 
-def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_node, epoch_metric, print_bar = False, model_graph = None, criterion_graph = None, criterion_node_softmax = None):
+def train_one_epoch(loader, model_node, size_edge, device, optimizer_graph, optimizer_node, criterion_node, epoch_metric, print_bar = False, model_graph = None, criterion_graph = None, criterion_node_softmax = None):
     model_node.train()
     model_graph.train()
     total_loss = 0
@@ -59,7 +59,8 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         mask = batch[2].to(device)
         supposed_close_label = batch[3].to(device) #1 if we close a cycle 0 otherwise
         
-        optimizer.zero_grad()
+        optimizer_graph.zero_grad()
+        optimizer_node.zero_grad()
         
         #gnn graph
         close = model_graph(data)
@@ -117,7 +118,8 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
 
         loss = loss_where + loss_which_type
         loss.backward()
-        optimizer.step()
+        optimizer_graph.step()
+        optimizer_node.step()
         total_loss_node += loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
         total_loss += loss_graph.item() * data.num_graphs +loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
 
@@ -330,10 +332,12 @@ class TrainGNN3_bis():
         print(f"Data loaded")
         self.begin_epoch = 0
 
-        self.optimizer = torch.optim.Adam(self.model_node.parameters(), lr=self.lr)
+        self.optimizer_node = torch.optim.Adam(self.model_node.parameters(), lr=self.lr)
+        self.optimizer_graph = torch.optim.Adam(self.model_graph.parameters(), lr=self.lr)
         if self.continue_training:
             self.model_node.load_state_dict(checkpoint['model_node_state_dict'])
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            self.optimizer_graph.load_state_dict(checkpoint['optimizer_graph_state_dict'])
+            self.optimizer_node.load_state_dict(checkpoint['optimizer_node_state_dict'])
             self.begin_epoch = checkpoint['epoch']
 
         #cross entropy loss without softmax
@@ -447,7 +451,8 @@ class TrainGNN3_bis():
                     model_node=self.model_node,
                     size_edge=self.edge_size,
                     device=self.device,
-                    optimizer=self.optimizer,
+                    optimizer_graph=self.optimizer_graph,
+                    optimizer_node=self.optimizer_node,
                     epoch_metric = True,
                     criterion_node=self.criterion_node,
                     print_bar = self.print_bar,
@@ -485,7 +490,8 @@ class TrainGNN3_bis():
                     model_node=self.model_node,
                     size_edge=self.edge_size,
                     device=self.device,
-                    optimizer=self.optimizer,
+                    optimizer_graph=self.optimizer_graph,
+                    optimizer_node=self.optimizer_node,
                     epoch_metric = False,
                     criterion_node=self.criterion_node,
                     print_bar = self.print_bar,
@@ -501,7 +507,8 @@ class TrainGNN3_bis():
                     'epoch': epoch,
                     'model_node_state_dict': self.model_node.state_dict(),
                     'model_graph_state_dict': self.model_graph.state_dict(),
-                    'optimizer_state_dict': self.optimizer.state_dict()}
+                    'optimizer_graph_state_dict': self.optimizer_graph.state_dict(),
+                    'optimizer_node_state_dict': self.optimizer_node.state_dict()}
 
                 epoch_save_file = os.path.join(self.directory_path_epochs, f'checkpoint_{index_max}.pt')
                 torch.save(checkpoint, epoch_save_file)
