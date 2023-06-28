@@ -49,7 +49,10 @@ def metric_gnn3_bis_if_cycle_actualized(prob_which_link, list_logits_which_neigh
 
     proba_link = torch.rand(prob_which_link.size()[0], device = device)
     prediction = torch.where(proba_link < prob_which_link, torch.tensor(1, device=device), torch.tensor(0, device=device))
+
     good_types_cycles_predicted = torch.sum(prediction == target_restricted_type)
+    #convert it in a scalar
+    good_types_cycles_predicted = good_types_cycles_predicted.item()
     for i,tensor in enumerate(list_logits_which_neighbour):
         proba = torch.softmax(tensor, dim = 0)
         prediction = torch.multinomial(proba, 1)

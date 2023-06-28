@@ -119,7 +119,7 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         loss.backward()
         optimizer.step()
         total_loss_node += loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
-        total_loss += loss_graph.item() * data.num_graphs * data.num_graphs +loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
+        total_loss += loss_graph.item() * data.num_graphs +loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
 
 
         if epoch_metric:
