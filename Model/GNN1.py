@@ -4,7 +4,6 @@ import torch.nn.functional as F
 from torch_geometric.nn import MessagePassing, global_add_pool
 from torch_geometric.utils import add_self_loops
 
-
 class CustomMessagePassingLayerOld(MessagePassing):
     def __init__(self, in_channels, out_channels, edge_channels):
         super(CustomMessagePassingLayerOld, self).__init__(aggr='add')
@@ -81,7 +80,6 @@ class ModelWithEdgeFeatures(torch.nn.Module):
             num_nodes_per_graph = torch.bincount(data.batch).view(-1, 1).float()
             # Normalize num_node 
             num_nodes_per_graph = num_nodes_per_graph / self.size_max
-
             x = torch.cat((x, num_nodes_per_graph), dim=1)
 
         # Two-layer MLP for classification
