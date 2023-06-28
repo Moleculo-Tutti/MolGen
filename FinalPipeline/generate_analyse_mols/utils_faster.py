@@ -180,7 +180,7 @@ def extract_all_graphs(batch):
         edge_mask = mask[batch.edge_index[0]] & mask[batch.edge_index[1]]
 
         if edge_mask.sum() == 0:
-            subgraph_edge_index = torch.tensor([], dtype=torch.long)
+            subgraph_edge_index = edge_index=torch.empty((2, 0), dtype=torch.long)
         else:
             subgraph_edge_index = torch.tensor(mapping_func(batch.edge_index[:, edge_mask].cpu().numpy()), dtype=torch.long)
         
@@ -188,10 +188,8 @@ def extract_all_graphs(batch):
 
         
         if batch.edge_attr is not None:
-
             subgraph_edge_attr = batch.edge_attr[edge_mask]
-        else:
-            subgraph_edge_attr = None
+
 
         # Construct the subgraph
         subgraph = Data(x=subgraph_x, edge_index=subgraph_edge_index, edge_attr=subgraph_edge_attr)
