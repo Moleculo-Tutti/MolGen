@@ -91,7 +91,7 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         labels_where = node_labels[mask,1]
         appartenance_tensor = data.batch[mask]
         begin_indices= torch.cat([torch.tensor([0], device=device), (appartenance_tensor[1:] != appartenance_tensor[:-1]).nonzero().flatten() + 1])
-        end_indices = torch.cat([begin_indices[1:],torch.tensor([len(mask)], device=device)])
+        end_indices = torch.cat([begin_indices[1:],torch.tensor([len(appartenance_tensor)], device=device)])
         lengths = end_indices - begin_indices
 
         out_which_neighbour_decomposed = torch.split(out_which_neighbour[mask], lengths.tolist())
@@ -225,7 +225,7 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
             labels_where = node_labels[mask,1]
             appartenance_tensor = data.batch[mask]
             begin_indices= torch.cat([torch.tensor([0], device=device), (appartenance_tensor[1:] != appartenance_tensor[:-1]).nonzero().flatten() + 1])
-            end_indices = torch.cat([begin_indices[1:],torch.tensor([len(mask)], device=device)])
+            end_indices = torch.cat([begin_indices[1:],torch.tensor([len(appartenance_tensor)], device=device)])
             lengths = end_indices - begin_indices
             out_which_neighbour_decomposed = torch.split(out_which_neighbour[mask], lengths.tolist())
             labels_where_decomposed = torch.split(labels_where, lengths.tolist())
