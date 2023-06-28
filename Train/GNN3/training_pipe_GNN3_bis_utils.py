@@ -72,6 +72,7 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
 
         #we combine the mask with the supposed_close, if a graph is supposed_closed (no cycle to make) all these nodes are added to the mask
         supposed_close_label_extended = supposed_close_label.repeat_interleave(torch.bincount(data.batch))
+        previous_mask = mask.clone()
         mask = torch.logical_and(mask, supposed_close_label_extended)
 
         #node in the mask and who have their second value of vector equal to 1
@@ -90,6 +91,8 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         labels_where = node_labels[mask,1]
         split_indices = (labels_where == 1).nonzero().flatten() # tensor of dimension 1
         lengths = split_indices - torch.cat((torch.tensor([-1], device=device), split_indices[:-1]))
+        print(previous_mask)
+        print(supposed_close_label_extended)
         print(labels_where)
         out_which_neighbour_decomposed = torch.split(out_which_neighbour[mask], lengths.tolist())
         labels_where_decomposed = torch.split(labels_where, lengths.tolist())
