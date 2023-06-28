@@ -89,7 +89,7 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         out_which_neighbour = out[:,1]
         labels_where = node_labels[mask,1].long()
         split_indices = (labels_where == 1).nonzero().flatten() # tensor of dimension 1
-        lengths = split_indices - torch.cat((torch.tensor([0], device=device), split_indices[:-1]))
+        lengths = split_indices - torch.cat((torch.tensor([-1], device=device), split_indices[:-1]))
         out_which_neighbour_decomposed = torch.split(out_which_neighbour[mask], lengths.tolist())
         labels_where_decomposed = torch.split(labels_where, lengths.tolist())
 
@@ -218,7 +218,7 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
             out_which_neighbour = out[:,1]
             labels_where = node_labels[mask,1].long()
             split_indices = (labels_where == 1).nonzero().flatten() # tensor of dimension 1
-            lengths = split_indices - torch.cat((torch.tensor([0], device=device), split_indices[:-1]))
+            lengths = split_indices - torch.cat((torch.tensor([-1], device=device), split_indices[:-1]))
             out_which_neighbour_decomposed = torch.split(out_which_neighbour[mask], lengths.tolist())
             labels_where_decomposed = torch.split(labels_where, lengths.tolist())
 
