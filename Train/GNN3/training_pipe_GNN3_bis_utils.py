@@ -87,7 +87,7 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
 
         #oroblem do the softmax on the minimal thing, we separate
         out_which_neighbour = out[:,1]
-        labels_where = node_labels[mask,1].long()
+        labels_where = node_labels[mask,1]
         split_indices = (labels_where == 1).nonzero().flatten() # tensor of dimension 1
         lengths = split_indices - torch.cat((torch.tensor([-1], device=device), split_indices[:-1]))
         out_which_neighbour_decomposed = torch.split(out_which_neighbour[mask], lengths.tolist())
@@ -110,7 +110,7 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         loss_where = 0
         for i in range(len(out_which_neighbour_decomposed)):
             print(out_which_neighbour_decomposed[i].size(), labels_where_decomposed[i].size())
-            loss_where += criterion_node_softmax(out_which_neighbour_decomposed[i], labels_where_decomposed[i].long())
+            loss_where += criterion_node_softmax(out_which_neighbour_decomposed[i], labels_where_decomposed[i])
 
         loss = loss_where + loss_which_type
         loss.backward()
@@ -219,7 +219,7 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
 
             #oroblem do the softmax on the minimal thing, we separate
             out_which_neighbour = out[:,1]
-            labels_where = node_labels[mask,1].long()
+            labels_where = node_labels[mask,1]
             split_indices = (labels_where == 1).nonzero().flatten() # tensor of dimension 1
             lengths = split_indices - torch.cat((torch.tensor([-1], device=device), split_indices[:-1]))
             out_which_neighbour_decomposed = torch.split(out_which_neighbour[mask], lengths.tolist())
@@ -241,7 +241,7 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
             # Use node_labels_indices with CrossEntropyLoss but without softmax
             loss_where = 0
             for i in range(len(out_which_neighbour_decomposed)):
-                loss_where += criterion_node_softmax(out_which_neighbour_decomposed[i], labels_where_decomposed[i].long())
+                loss_where += criterion_node_softmax(out_which_neighbour_decomposed[i], labels_where_decomposed[i])
 
             total_loss_node += loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
             total_loss += loss_graph.item() * data.num_graphs * data.num_graphs +loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
