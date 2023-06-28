@@ -182,7 +182,9 @@ def extract_all_graphs(batch):
         if edge_mask.sum() == 0:
             print(edge_mask)
             print(batch.edge_index)
-
+            print(batch.batch)
+            print(i)
+            print(mask)
             raise ValueError('Graph with no edges')
         
         
