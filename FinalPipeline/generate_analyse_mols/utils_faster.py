@@ -182,7 +182,7 @@ def extract_all_graphs(batch):
         if edge_mask.sum() == 0:
             print(edge_mask)
             print(batch.edge_index)
-            
+
             raise ValueError('Graph with no edges')
         
         
@@ -474,7 +474,6 @@ class MolGenBatchFaster():
                 raise ValueError('error')
             # If all the mask is True, then all the molecules are finished
             if torch.all(self.finished_mask):
-                print('all finished')
                 return 
             """
             Prepare the GNN 1 BATCH
