@@ -195,12 +195,10 @@ class ZincSubgraphDatasetStep(Dataset):
                 node_features_label = torch.zeros(len(subgraph.x), self.edge_size-1) #there is just two dim
                 if len(terminal_nodes[1][id_chosen][3]) != 0:
                     closed_cycle = torch.tensor(1.).unsqueeze(0)
-                    cycle_neighbor = terminal_nodes[1][id_chosen][3][0] #we put 0 to take only one closing cycle and not multiples
-                    if cycle_neighbor[1][1] == 1 :#close by a double bond if 0 means it closed byc a single bond
-                        node_features_label[id_map[cycle_neighbor[0]]][0] = 1 
-                    node_features_label[id_map[cycle_neighbor[0]]][-1] = 1 # we put a one to indicate that the cycle is closed
-
-            
+                    for cycle_neighbor in terminal_nodes[1][id_chosen][3]: #we put 0 to take only one closing cycle and not multiples
+                        if cycle_neighbor[1][1] == 1 :#close by a double bond if 0 means it closed byc a single bond
+                            node_features_label[id_map[cycle_neighbor[0]]][0] = 1 
+                        node_features_label[id_map[cycle_neighbor[0]]][-1] = 1 # we put a one to indicate that the cycle is closed
                 else:
                     closed_cycle = torch.tensor(0.).unsqueeze(0)
                 
