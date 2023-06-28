@@ -34,7 +34,7 @@ sys.path.append(parent_parent_dir)
 
 from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_GNN3_bis
 from Model.GNN3 import  ModelWithgraph_embedding_modif, ModelWithgraph_embedding_close_or_not_with_node_embedding, ModelWithgraph_embedding_close_or_not_without_node_embedding
-from Model.metrics import  metric_gnn3_bis_graph_level, metric_gnn3_bis_if_cycle
+from Model.metrics import  metric_gnn3_bis_graph_level, metric_gnn3_bis_if_cycle, metric_gnn3_bis_if_cycle_actualized
 
 
 def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_node, epoch_metric, print_bar = False, model_graph = None, criterion_graph = None, criterion_node_softmax = None):
@@ -79,27 +79,36 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
 
         #gnn node
         out = model_node(data)
+
         out_which_link = out[:,0]
         prob_which_link = torch.sigmoid(out_which_link)
+        loss_which_type = criterion_node(out_which_link[node_where_closing_label], node_labels[node_where_closing_label,0])
+
+
+        #oroblem do the softmax on the minimal thing, we separate
+        out_which_neighbour = out[:,1]
+        labels_where = node_labels[mask,1].long()
+        split_indices = (labels_where == 1).nonzero().flatten() # tensor of dimension 1
+        lengths = split_indices - torch.cat((torch.tensor([0], device=device), split_indices[:-1]))
+        out_which_neighbour_decomposed = torch.split(out_which_neighbour[mask], lengths.tolist())
+        labels_where_decomposed = torch.split(labels_where, lengths.tolist())
+
+
+        """ old version false because cout node not in mask for the softmax
         num_graph = data.batch.max() + 1
         exp_sum_groups = torch.zeros(num_graph, device=device)
         exp_values = torch.exp(out[:, 1])
         exp_sum_groups.scatter_add_(0, data.batch, exp_values)        
         # Calculer les probabilités softmax par groupe d'indices
         prob_which_neighbour = exp_values / exp_sum_groups[data.batch]
-        log_prob_which_neighbour = torch.log(prob_which_neighbour[mask])
+        # we should rebatch for 
+        log_prob_which_neighbour = torch.log(prob_which_neighbour[mask], dim = 1 )
+        we also used NNLoss
+        """
 
+        # Use node_labels_indices with CrossEntropyLoss but without softmax
+        loss_where = criterion_node_softmax(out_which_neighbour_decomposed, labels_where_decomposed)
 
-        # Use node_labels_indices with CrossEntropyLoss but without 
-        labels_where = node_labels[mask, 1]
-        labels_where = labels_where.long()
-        print("labels_where", labels_where)
-        print('labels_where.shape', labels_where.size())
-        print('log_prob_which_neighbour', log_prob_which_neighbour)
-        print('log_prob_which_neighbour.shape', log_prob_which_neighbour.size())
-        quit()
-        loss_where = criterion_node_softmax(log_prob_which_neighbour, labels_where)
-        loss_which_type = criterion_node(out_which_link[node_where_closing_label], node_labels[node_where_closing_label,0])
         loss = loss_where + loss_which_type
         loss.backward()
         optimizer.step()
@@ -108,8 +117,9 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
 
 
         if epoch_metric:
+            target_restricted_type = node_labels[node_where_closing_label,0]
             num_wanted_cycles, cycles_predicted, not_cycles_well_predicted, cycles_well_predicted = metric_gnn3_bis_graph_level(data, close_sig, supposed_close_label, device=device)
-            cycles_created_at_good_place, good_types_cycles_predicted = metric_gnn3_bis_if_cycle(data, prob_which_link, prob_which_neighbour, node_labels, supposed_close_label, device=device)
+            cycles_created_at_good_place, good_types_cycles_predicted = metric_gnn3_bis_if_cycle_actualized(prob_which_link, out_which_neighbour_decomposed,target_restricted_type, labels_where_decomposed,device)
  
             total_graphs_processed += data.num_graphs
             global_cycles_predicted += cycles_predicted
@@ -119,10 +129,11 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
             global_well_placed_cycles += cycles_created_at_good_place
             global_well_type_cycles += good_types_cycles_predicted
             
-            del cycles_predicted, num_wanted_cycles, not_cycles_well_predicted, cycles_well_predicted, cycles_created_at_good_place, good_types_cycles_predicted
+            del cycles_predicted, num_wanted_cycles, not_cycles_well_predicted, cycles_well_predicted, cycles_created_at_good_place, good_types_cycles_predicted, target_restricted_type
         
-        del data, node_labels, mask, supposed_close_label, node_where_closing_label, out, prob_which_link, num_graph, exp_sum_groups, exp_values, prob_which_neighbour
-        del loss_where, loss_which_type, loss , loss_graph, supposed_close_label_extended, out_which_link, close_sig, close, log_prob_which_neighbour, labels_where
+        del data, node_labels, mask, supposed_close_label, node_where_closing_label, out, prob_which_link,
+        del loss_where, loss_which_type, loss , loss_graph, supposed_close_label_extended, out_which_link, close_sig, close, labels_where
+        del out_which_neighbour, out_which_neighbour_decomposed, labels_where_decomposed, split_indices, lengths
 
 
     if (total_graphs_processed == 0):
@@ -197,27 +208,44 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
 
             #gnn node
             out = model_node(data)
+
             out_which_link = out[:,0]
             prob_which_link = torch.sigmoid(out_which_link)
+            loss_which_type = criterion_node(out_which_link[node_where_closing_label], node_labels[node_where_closing_label,0])
+
+
+            #oroblem do the softmax on the minimal thing, we separate
+            out_which_neighbour = out[:,1]
+            labels_where = node_labels[mask,1].long()
+            split_indices = (labels_where == 1).nonzero().flatten() # tensor of dimension 1
+            lengths = split_indices - torch.cat((torch.tensor([0], device=device), split_indices[:-1]))
+            out_which_neighbour_decomposed = torch.split(out_which_neighbour[mask], lengths.tolist())
+            labels_where_decomposed = torch.split(labels_where, lengths.tolist())
+
+
+            """ old version false because cout node not in mask for the softmax
             num_graph = data.batch.max() + 1
             exp_sum_groups = torch.zeros(num_graph, device=device)
             exp_values = torch.exp(out[:, 1])
             exp_sum_groups.scatter_add_(0, data.batch, exp_values)        
             # Calculer les probabilités softmax par groupe d'indices
             prob_which_neighbour = exp_values / exp_sum_groups[data.batch]
-            log_prob_which_neighbour = torch.log(prob_which_neighbour[mask])
+            # we should rebatch for 
+            log_prob_which_neighbour = torch.log(prob_which_neighbour[mask], dim = 1 )
+            we also used NNLoss
+            """
 
-            # Use node_labels_indices with CrossEntropyLoss but without 
-            labels_where = node_labels[mask,1].long()
-            loss_where = criterion_node_softmax(log_prob_which_neighbour, labels_where)
-            loss_which_type = criterion_node(out_which_link[node_where_closing_label], node_labels[node_where_closing_label,0])
+            # Use node_labels_indices with CrossEntropyLoss but without softmax
+            loss_where = criterion_node_softmax(out_which_neighbour_decomposed, labels_where_decomposed)
 
             total_loss_node += loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
             total_loss += loss_graph.item() * data.num_graphs * data.num_graphs +loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
             # Add softmax to out
+
+            target_restricted_type = node_labels[node_where_closing_label,0]
         
             num_wanted_cycles, cycles_predicted, not_cycles_well_predicted, cycles_well_predicted = metric_gnn3_bis_graph_level(data, close_sig, supposed_close_label, device=device)
-            cycles_created_at_good_place, good_types_cycles_predicted = metric_gnn3_bis_if_cycle(data, prob_which_link, prob_which_neighbour, node_labels, supposed_close_label, device=device)
+            cycles_created_at_good_place, good_types_cycles_predicted = metric_gnn3_bis_if_cycle_actualized(prob_which_link, out_which_neighbour_decomposed,target_restricted_type, labels_where_decomposed,device)
 
             total_graphs_processed += data.num_graphs
             global_cycles_predicted += cycles_predicted
@@ -229,8 +257,9 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
             
             del cycles_predicted, num_wanted_cycles, not_cycles_well_predicted, cycles_well_predicted, cycles_created_at_good_place, good_types_cycles_predicted
             
-            del data, node_labels, mask, supposed_close_label, node_where_closing_label, out, prob_which_link, num_graph, exp_sum_groups, exp_values, prob_which_neighbour
-            del loss_where, loss_which_type, loss_graph, supposed_close_label_extended, out_which_link, close, close_sig, log_prob_which_neighbour, labels_where
+            del data, node_labels, mask, supposed_close_label, node_where_closing_label, out, prob_which_link
+            del loss_where, loss_which_type, loss_graph, supposed_close_label_extended, out_which_link, close, close_sig, labels_where
+            del out_which_neighbour, out_which_neighbour_decomposed, labels_where_decomposed, split_indices, lengths, target_restricted_type 
 
 
     if (total_graphs_processed == 0):
@@ -299,7 +328,7 @@ class TrainGNN3_bis():
 
         #cross entropy loss without softmax
         self.criterion_node = nn.BCEWithLogitsLoss()
-        self.criterion_node_softmax = nn.NLLLoss()
+        self.criterion_node_softmax = nn.CrossEntropyLoss()
         self.criterion_graph = nn.BCEWithLogitsLoss()
 
         self.training_history = pd.DataFrame(columns=['epoch', 'loss', 'accuracy_num_cycles', 'precision_num_cycles', 'recall_num_cycles', 'accuracy_neighhbor_chosen' , 'accuracy_type_chosen', 'f1_score_num_cycles'])

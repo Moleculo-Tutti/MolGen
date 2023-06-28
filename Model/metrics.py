@@ -42,6 +42,23 @@ def metric_gnn3_bis_graph_level(model_input, model2_output, supposed_closed_targ
     del prediction, proba
     return num_wanted_cycles, cycles_predicted, not_cycles_well_predicted, cycles_well_predicted
 
+
+def metric_gnn3_bis_if_cycle_actualized(prob_which_link, list_logits_which_neighbour,target_restricted_type, target_restricted_neighbour,device):
+    cycles_created_at_good_place = 0
+    good_types_cycles_predicted = 0
+
+    proba_link = torch.rand(prob_which_link.size()[0], device = device)
+    prediction = torch.where(proba_link < prob_which_link, torch.tensor(1, device=device), torch.tensor(0, device=device))
+    good_types_cycles_predicted = torch.sum(prediction == target_restricted_type)
+    for i,tensor in enumerate(list_logits_which_neighbour):
+        proba = torch.softmax(tensor, dim = 0)
+        prediction = torch.multinomial(proba, 1)
+        if prediction == torch.argmax(target_restricted_neighbour[i]):
+            cycles_created_at_good_place += 1
+
+    return cycles_created_at_good_place, good_types_cycles_predicted
+
+
 def metric_gnn3_bis_if_cycle(model_input, prob_which_link, prob_which_neighbour, target, supposed_closed_target, device):
     #the mask are already done before 
     num_cycles = 0 
