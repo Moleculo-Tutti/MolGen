@@ -107,7 +107,10 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         """
 
         # Use node_labels_indices with CrossEntropyLoss but without softmax
-        loss_where = criterion_node_softmax(out_which_neighbour_decomposed, labels_where_decomposed)
+        loss_where = 0
+        for i in range(len(out_which_neighbour_decomposed)):
+            print(out_which_neighbour_decomposed[i].size(), labels_where_decomposed[i].size())
+            loss_where += criterion_node_softmax(out_which_neighbour_decomposed[i], labels_where_decomposed[i])
 
         loss = loss_where + loss_which_type
         loss.backward()
