@@ -398,103 +398,97 @@ class TrainGNN3_bis():
         progress_bar = tqdm(total=max_iteration)
         
         while index_iter <= max_iteration:
-            try :
-                torch.cuda.empty_cache()
-                epoch = index_iter + self.begin_epoch
-                save_epoch = False
-                index_iter +=1
-                progress_bar.update(1)
-                if epoch % self.every_epoch_metric == 0:
-                    loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles= train_one_epoch(
-                        loader=self.loader_train,
-                        model_node=self.model_node,
-                        size_edge=self.edge_size,
-                        device=self.device,
-                        optimizer=self.optimizer,
-                        epoch_metric = True,
-                        criterion_node=self.criterion_node,
-                        print_bar = self.print_bar,
-                        model_graph = self.model_graph,
-                        criterion_graph=self.criterion_graph,
-                        criterion_node_softmax=self.criterion_node_softmax)
+            torch.cuda.empty_cache()
+            epoch = index_iter + self.begin_epoch
+            save_epoch = False
+            index_iter +=1
+            progress_bar.update(1)
+            if epoch % self.every_epoch_metric == 0:
+                loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles= train_one_epoch(
+                    loader=self.loader_train,
+                    model_node=self.model_node,
+                    size_edge=self.edge_size,
+                    device=self.device,
+                    optimizer=self.optimizer,
+                    epoch_metric = True,
+                    criterion_node=self.criterion_node,
+                    print_bar = self.print_bar,
+                    model_graph = self.model_graph,
+                    criterion_graph=self.criterion_graph,
+                    criterion_node_softmax=self.criterion_node_softmax)
                     
-                    self.training_history.loc[epoch] = [epoch, loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles]
+                self.training_history.loc[epoch] = [epoch, loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles]
 
-                    loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles = eval_one_epoch(
-                        loader=self.loader_val,
-                        model_node=self.model_node,
-                        size_edge=self.edge_size,
-                        device=self.device,
-                        criterion_node=self.criterion_node,
-                        print_bar = self.print_bar,
-                        val_metric_size = self.val_metric_size,
-                        model_graph = self.model_graph,
-                        criterion_graph=self.criterion_graph,
-                        criterion_node_softmax=self.criterion_node_softmax)
-                    
-                    self.eval_history.loc[epoch] = [epoch,loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles]
-                    
-                    # Check if the loss is better than one of the 6 best losses (compare only along the second dimension of the tuples)
-
-                    if loss < max(self.six_best_eval_loss, key=lambda x: x[1])[1]:
-                        # switch the save variable to True
-                        save_epoch = True
-                        index_max = self.six_best_eval_loss.index(max(self.six_best_eval_loss, key=lambda x: x[1]))
-                        self.six_best_eval_loss[index_max] = (epoch, loss)
+                loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles = eval_one_epoch(
+                    loader=self.loader_val,
+                    model_node=self.model_node,
+                    size_edge=self.edge_size,
+                    device=self.device,
+                    criterion_node=self.criterion_node,
+                    print_bar = self.print_bar,
+                    val_metric_size = self.val_metric_size,
+                    model_graph = self.model_graph,
+                    criterion_graph=self.criterion_graph,
+                    criterion_node_softmax=self.criterion_node_softmax)
                 
+                self.eval_history.loc[epoch] = [epoch,loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles]
+                
+                # Check if the loss is better than one of the 6 best losses (compare only along the second dimension of the tuples)
+
+                if loss < max(self.six_best_eval_loss, key=lambda x: x[1])[1]:
+                    # switch the save variable to True
+                    save_epoch = True
+                    index_max = self.six_best_eval_loss.index(max(self.six_best_eval_loss, key=lambda x: x[1]))
+                    self.six_best_eval_loss[index_max] = (epoch, loss)
+                
+            else:
+                loss, _, _, _, _, _, _,  = train_one_epoch(
+                    loader=self.loader_train,
+                    model_node=self.model_node,
+                    size_edge=self.edge_size,
+                    device=self.device,
+                    optimizer=self.optimizer,
+                    epoch_metric = False,
+                    criterion_node=self.criterion_node,
+                    print_bar = self.print_bar,
+                    model_graph = self.model_graph,
+                    criterion_graph=self.criterion_graph,
+                    criterion_node_softmax=self.criterion_node_softmax)
+                
+                self.training_history.loc[epoch] = [epoch, loss, None, None, None, None, None, None]
+                self.eval_history.loc[epoch] = [epoch, None, None, None, None, None, None, None]
+
+            if save_epoch:
+                checkpoint = {
+                    'epoch': epoch,
+                    'model_node_state_dict': self.model_node.state_dict(),
+                    'model_graph_state_dict': self.model_graph.state_dict(),
+                    'optimizer_state_dict': self.optimizer.state_dict()}
+
+                epoch_save_file = os.path.join(self.directory_path_epochs, f'checkpoint_{index_max}.pt')
+                torch.save(checkpoint, epoch_save_file)
+
+                training_csv_directory = os.path.join(self.directory_path_experience, 'training_history.csv')
+                if os.path.exists(training_csv_directory):
+                    # If the file already exists, we append the new data
+                    self.training_history.to_csv(training_csv_directory, mode='a', header=False)
                 else:
-                    loss, _, _, _, _, _, _,  = train_one_epoch(
-                        loader=self.loader_train,
-                        model_node=self.model_node,
-                        size_edge=self.edge_size,
-                        device=self.device,
-                        optimizer=self.optimizer,
-                        epoch_metric = False,
-                        criterion_node=self.criterion_node,
-                        print_bar = self.print_bar,
-                        model_graph = self.model_graph,
-                        criterion_graph=self.criterion_graph,
-                        criterion_node_softmax=self.criterion_node_softmax)
-                    
-                    self.training_history.loc[epoch] = [epoch, loss, None, None, None, None, None, None]
-                    self.eval_history.loc[epoch] = [epoch, None, None, None, None, None, None, None]
+                    self.training_history.to_csv(training_csv_directory)   
 
-                if save_epoch:
-                    checkpoint = {
-                        'epoch': epoch,
-                        'model_node_state_dict': self.model_node.state_dict(),
-                        'model_graph_state_dict': self.model_graph.state_dict(),
-                        'optimizer_state_dict': self.optimizer.state_dict()}
+                eval_csv_directory = os.path.join(self.directory_path_experience, 'eval_history.csv')    
+                if os.path.exists(eval_csv_directory):        
+                    # If the file already exists, we append the new data
+                    self.eval_history.to_csv(eval_csv_directory, mode='a', header=False)
+                else:
+                    self.eval_history.to_csv(eval_csv_directory)
 
-                    epoch_save_file = os.path.join(self.directory_path_epochs, f'checkpoint_{index_max}.pt')
-                    torch.save(checkpoint, epoch_save_file)
-
-                    training_csv_directory = os.path.join(self.directory_path_experience, 'training_history.csv')
-                    if os.path.exists(training_csv_directory):
-                        # If the file already exists, we append the new data
-                        self.training_history.to_csv(training_csv_directory, mode='a', header=False)
-                    else:
-                        self.training_history.to_csv(training_csv_directory)   
-
-                    eval_csv_directory = os.path.join(self.directory_path_experience, 'eval_history.csv')    
-                    if os.path.exists(eval_csv_directory):        
-                        # If the file already exists, we append the new data
-                        self.eval_history.to_csv(eval_csv_directory, mode='a', header=False)
-                    else:
-                        self.eval_history.to_csv(eval_csv_directory)
-
-                    # Create a txt file containing the infos about the six best epochs saved 
-                    six_best_epochs_file = os.path.join(self.directory_path_experience, 'six_best_epochs.txt')
-                    with open(six_best_epochs_file, 'w') as file:
-                        for epoch, loss in self.six_best_eval_loss:
-                            file.write(f'Epoch {epoch} with loss {loss}\n')
-                    del checkpoint, epoch_save_file, six_best_epochs_file, training_csv_directory, eval_csv_directory, file
-                del loss
-                gc.collect()
-            except RuntimeError as e:
-                print(f'Error at epoch {epoch} : {e}')
-                torch.cuda.empty_cache()
-                gc.collect()
-                continue
+                # Create a txt file containing the infos about the six best epochs saved 
+                six_best_epochs_file = os.path.join(self.directory_path_experience, 'six_best_epochs.txt')
+                with open(six_best_epochs_file, 'w') as file:
+                    for epoch, loss in self.six_best_eval_loss:
+                        file.write(f'Epoch {epoch} with loss {loss}\n')
+                del checkpoint, epoch_save_file, six_best_epochs_file, training_csv_directory, eval_csv_directory, file
+            del loss
+            gc.collect()
         progress_bar.close()
                         
