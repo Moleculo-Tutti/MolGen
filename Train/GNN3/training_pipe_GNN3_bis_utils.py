@@ -93,6 +93,11 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         # Use node_labels_indices with CrossEntropyLoss but without 
         labels_where = node_labels[mask, 1]
         labels_where = labels_where.long()
+        print("labels_where", labels_where)
+        print('labels_where.shape', labels_where.size())
+        print('log_prob_which_neighbour', log_prob_which_neighbour)
+        print('log_prob_which_neighbour.shape', log_prob_which_neighbour.size())
+        quit()
         loss_where = criterion_node_softmax(log_prob_which_neighbour, labels_where)
         loss_which_type = criterion_node(out_which_link[node_where_closing_label], node_labels[node_where_closing_label,0])
         loss = loss_where + loss_which_type
