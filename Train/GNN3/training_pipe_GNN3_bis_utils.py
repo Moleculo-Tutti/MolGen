@@ -236,7 +236,10 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
             """
 
             # Use node_labels_indices with CrossEntropyLoss but without softmax
-            loss_where = criterion_node_softmax(out_which_neighbour_decomposed, labels_where_decomposed)
+            loss_where = 0
+            for i in range(len(out_which_neighbour_decomposed)):
+                print(out_which_neighbour_decomposed[i].size(), labels_where_decomposed[i].size())
+                loss_where += criterion_node_softmax(out_which_neighbour_decomposed[i], labels_where_decomposed[i])
 
             total_loss_node += loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
             total_loss += loss_graph.item() * data.num_graphs * data.num_graphs +loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
