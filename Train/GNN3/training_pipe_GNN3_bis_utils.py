@@ -81,7 +81,7 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         out = model_node(data)
 
         out_which_link = out[:,0]
-        prob_which_link = torch.sigmoid(out_which_link)
+        prob_which_link = torch.sigmoid(out_which_link[node_where_closing_label])
         loss_which_type = criterion_node(out_which_link[node_where_closing_label], node_labels[node_where_closing_label,0])
 
 
@@ -109,7 +109,6 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         # Use node_labels_indices with CrossEntropyLoss but without softmax
         loss_where = 0
         for i in range(len(out_which_neighbour_decomposed)):
-            print(out_which_neighbour_decomposed[i].size(), labels_where_decomposed[i].size())
             loss_where += criterion_node_softmax(out_which_neighbour_decomposed[i], labels_where_decomposed[i])
 
         loss = loss_where + loss_which_type
@@ -213,7 +212,7 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
             out = model_node(data)
 
             out_which_link = out[:,0]
-            prob_which_link = torch.sigmoid(out_which_link)
+            prob_which_link = torch.sigmoid(out_which_link[node_where_closing_label])
             loss_which_type = criterion_node(out_which_link[node_where_closing_label], node_labels[node_where_closing_label,0])
 
 
