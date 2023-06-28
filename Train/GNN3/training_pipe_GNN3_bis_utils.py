@@ -437,16 +437,10 @@ class TrainGNN3_bis():
             self.eval_history = self.eval_history[self.eval_history['epoch'] < self.begin_epoch]
     
     def train(self):
-        index_iter = 0
-        max_iteration = self.n_epochs - self.begin_epoch
-        progress_bar = tqdm(total=max_iteration)
         
-        while index_iter <= max_iteration:
+        for epoch in tqdm(range(self.begin_epoch, self.n_epochs+1)):
             torch.cuda.empty_cache()
-            epoch = index_iter + self.begin_epoch
             save_epoch = False
-            index_iter +=1
-            progress_bar.update(1)
             if epoch % self.every_epoch_metric == 0:
                 loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles= train_one_epoch(
                     loader=self.loader_train,
@@ -534,5 +528,4 @@ class TrainGNN3_bis():
                 del checkpoint, epoch_save_file, six_best_epochs_file, training_csv_directory, eval_csv_directory, file
             del loss
             gc.collect()
-        progress_bar.close()
                         
