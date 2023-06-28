@@ -224,6 +224,23 @@ def get_subgraph_with_terminal_nodes_step(data, num_steps, impose_edges=False):
     new_id += 1
 
     # Breadth search 
+    if num_steps == 1:
+        current = queue.pop(0)
+        # Add neighbors to the queue
+        neighbors = data.edge_index[:, data.edge_index[0] == start_atom][1].tolist()
+        external_neighbors = []
+        for neighbor in neighbors:
+            #get edge attributes
+            edge_attr_idx = (data.edge_index[0] == start_atom) & (data.edge_index[1] == neighbor)
+            edge_data = data.edge_attr[edge_attr_idx]
+            external_neighbors_edges = []
+            external_neighbors.append((neighbor, data.x[neighbor], edge_data, external_neighbors_edges))
+        
+        terminal_node_infos = (current, external_neighbors)
+        subgraph_indices = torch.tensor(list(subgraph_atoms), dtype=torch.long)
+        subgraph_data = get_subgraph(data, subgraph_indices, id_map)
+
+        return subgraph_data, terminal_node_infos, id_map
 
     while queue or count_num_steps <= num_steps:
 
