@@ -180,6 +180,8 @@ def extract_all_graphs(batch):
         edge_mask = mask[batch.edge_index[0]] & mask[batch.edge_index[1]]
 
         if edge_mask.sum() == 0:
+            print(mask[batch.edge_index[0]].sum())
+            print(mask[batch.edge_index[1]].sum())
             print(edge_mask)
             print(batch.edge_index)
             print(batch.batch)
