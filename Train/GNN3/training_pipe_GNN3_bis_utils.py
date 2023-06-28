@@ -89,11 +89,11 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         #oroblem do the softmax on the minimal thing, we separate
         out_which_neighbour = out[:,1]
         labels_where = node_labels[mask,1]
-        split_indices = (labels_where == 1).nonzero().flatten() # tensor of dimension 1
-        lengths = split_indices - torch.cat((torch.tensor([-1], device=device), split_indices[:-1]))
-        print(previous_mask)
-        print(supposed_close_label_extended)
-        print(labels_where)
+        appartenance_tensor = data.batch[mask]
+        begin_indices= torch.cat([torch.tensor([0], device=device), (appartenance_tensor[1:] != appartenance_tensor[:-1]).nonzero().flatten() + 1])
+        end_indices = torch.cat([begin_indices[1:],torch.tensor([len(mask)], device=device)])
+        lengths = end_indices - begin_indices
+
         out_which_neighbour_decomposed = torch.split(out_which_neighbour[mask], lengths.tolist())
         labels_where_decomposed = torch.split(labels_where, lengths.tolist())
 
@@ -139,7 +139,7 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         
         del data, node_labels, mask, supposed_close_label, node_where_closing_label, out, prob_which_link,
         del loss_where, loss_which_type, loss , loss_graph, supposed_close_label_extended, out_which_link, close_sig, close, labels_where
-        del out_which_neighbour, out_which_neighbour_decomposed, labels_where_decomposed, split_indices, lengths
+        del out_which_neighbour, out_which_neighbour_decomposed, labels_where_decomposed, lengths, begin_indices, end_indices, appartenance_tensor
 
 
     if (total_graphs_processed == 0):
@@ -223,8 +223,10 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
             #oroblem do the softmax on the minimal thing, we separate
             out_which_neighbour = out[:,1]
             labels_where = node_labels[mask,1]
-            split_indices = (labels_where == 1).nonzero().flatten() # tensor of dimension 1
-            lengths = split_indices - torch.cat((torch.tensor([-1], device=device), split_indices[:-1]))
+            appartenance_tensor = data.batch[mask]
+            begin_indices= torch.cat([torch.tensor([0], device=device), (appartenance_tensor[1:] != appartenance_tensor[:-1]).nonzero().flatten() + 1])
+            end_indices = torch.cat([begin_indices[1:],torch.tensor([len(mask)], device=device)])
+            lengths = end_indices - begin_indices
             out_which_neighbour_decomposed = torch.split(out_which_neighbour[mask], lengths.tolist())
             labels_where_decomposed = torch.split(labels_where, lengths.tolist())
 
@@ -267,7 +269,7 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
             
             del data, node_labels, mask, supposed_close_label, node_where_closing_label, out, prob_which_link
             del loss_where, loss_which_type, loss_graph, supposed_close_label_extended, out_which_link, close, close_sig, labels_where
-            del out_which_neighbour, out_which_neighbour_decomposed, labels_where_decomposed, split_indices, lengths, target_restricted_type 
+            del out_which_neighbour, out_which_neighbour_decomposed, labels_where_decomposed, lengths, target_restricted_type, appartenance_tensor, begin_indices, end_indices
 
 
     if (total_graphs_processed == 0):
