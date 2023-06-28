@@ -90,6 +90,7 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer, criterion_
         labels_where = node_labels[mask,1]
         split_indices = (labels_where == 1).nonzero().flatten() # tensor of dimension 1
         lengths = split_indices - torch.cat((torch.tensor([-1], device=device), split_indices[:-1]))
+        print(labels_where)
         out_which_neighbour_decomposed = torch.split(out_which_neighbour[mask], lengths.tolist())
         labels_where_decomposed = torch.split(labels_where, lengths.tolist())
 
