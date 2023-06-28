@@ -184,8 +184,6 @@ def extract_all_graphs(batch):
         else:
             subgraph_edge_index = torch.tensor(mapping_func(batch.edge_index[:, edge_mask].cpu().numpy()), dtype=torch.long)
         
-        subgraph_edge_index = torch.tensor(mapping_func(batch.edge_index[:, edge_mask].cpu().numpy()), dtype=torch.long)
-
         # Extract all the edge features that correspond to the i-th graph
 
         
