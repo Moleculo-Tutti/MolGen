@@ -505,6 +505,14 @@ class MolGenBatchFaster():
             # Handle the stopping condition (where predicted_node is encoding_size - 1)
             stop_mask = (predicted_nodes == self.encoding_size - 1).flatten()
 
+            # If it's the first epoch and all the first nodes are stop nodes, then print an error
+            if torch.any(stop_mask) and self.node_counts.sum() == 0:
+                print('error')
+                # print the prediction of the one that is a stop node
+                print(softmax_predictions[stop_mask])
+                # print the x of the one that is a stop node
+                print(self.batch_mol_graph.x[stop_mask])
+                
             # Increment the node count for graphs that haven't stopped and that are not finished
             self.node_counts = self.node_counts + torch.logical_and(~stop_mask, ~self.finished_mask).long()
 
