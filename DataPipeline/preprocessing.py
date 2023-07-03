@@ -232,7 +232,7 @@ def get_subgraph_with_terminal_nodes_step(data, num_steps, impose_edges=False):
         for neighbor in neighbors:
             #get edge attributes
             edge_attr_idx = (data.edge_index[0] == start_atom) & (data.edge_index[1] == neighbor)
-            edge_data = data.edge_attr[edge_attr_idx]
+            edge_data = data.edge_attr[edge_attr_idx][0]
             external_neighbors_edges = []
             external_neighbors.append((neighbor, data.x[neighbor], edge_data, external_neighbors_edges))
         
