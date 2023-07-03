@@ -12,8 +12,7 @@ import torch_geometric
 from torch_geometric.data import Data, Batch
 
 
-def append_node_link(true_graphs, next_step_gnn1, next_step_gnn2):
-    pass
+
 
 
 def create_torch_graph_from_one_atom(atom, edge_size, encoding_option='charged'):
@@ -51,7 +50,6 @@ def sample_path_from_model(model_q, model_a, model_pi,features,lambdas, batch_si
     #it also compute the features of the final molecule so that we can compute the exponents
 
     #we first sample a batch of x
-    #generate a batch of initial_atoms 
     
     true_graphs = [create_torch_graph_from_one_atom(sample_first_atom(), edge_size=edge_size, encoding_option='charged')
                             for i in range(batch_size)]
@@ -59,88 +57,11 @@ def sample_path_from_model(model_q, model_a, model_pi,features,lambdas, batch_si
     a_value = torch.zeros(batch_size)
     q_value = torch.zeros(batch_size)
     pi_value = torch.zeros(batch_size)
-    queues = [[0] for i in range(batch_size)]
-
-    #not_graphs_finished is a mask of size batch size, initialized at true
-    not_mols_finished = [True for i in range(batch_size)]
+    # the ground truth is given by the multinomial choices over the prediction of q 
     
-    #while not all atoms are finished
-    while torch.sum(not_mols_finished) > 0 :
-        current_atoms = torch.zeros(batch_size)
-        for i in range(batch_size):
-            if len(queues[i]) == 0:
-                not_mols_finished[i] = False
-                current_atoms[i]= -1 # precise no current_atoms
-            else :
-                current_atoms[i] = queues[i][0]
 
-        graph_for_gnn1 =[graph.clone() for graph in true_graphs]
-        #add feature position
-        for graph1 in graph_for_gnn1 :
-                graph1.x = torch.cat([graph1.x, torch.zeros(graph1.x.size(0), 1)], dim=1)
-                graph1.x[0:current_atoms[i], -1] = 1
+    #TODO
 
-        #compute the gnn1 and apply softmax
-        batch_for_gnn1 = Batch.from_data_list(graph_for_gnn1)
-        batch_for_gnn1.to(device)
-        output_gnn1_q = torch.softmax(model_q.GNN1(batch_for_gnn1), dim = 1)
-        output_gnn1_a = torch.softmax(model_a.GNN1(batch_for_gnn1),  dim = 1)
-        output_gnn1_pi = torch.softmax(model_pi.GNN1(batch_for_gnn1), dim = 1)
-
-        #for each graph in the ouptut_gnn1_q we sample with a multinomial
-        next_step_gnn1 = torch.multinomial(output_gnn1_q, 1).item() #shape (batch_size, 1)
-
-        a_value = a_value * torch([output_gnn1_a[i][next_step_gnn1[i]] for i in range(batch_size) if not_mols_finished[i]])
-        pi_value = pi_value * torch([output_gnn1_pi[i][next_step_gnn1[i]] for i in range(batch_size) if not_mols_finished[i]])
-        q_value = q_value * torch([output_gnn1_q[i][next_step_gnn1[i]] for i in range(batch_size) if not_mols_finished[i]])
-
-        for i in range(batch_size):
-            encoded_predicted_node = torch.zeros(output_gnn1_q.size(), dtype=torch.float)
-            encoded_predicted_node[0, predicted_node] = 1
-
-        
-        self.queue.append(graph1.x.size(0))
-
-        mask_no_stop_step = [next_step_gnn1[i] != 12 for i in range(batch_size)]
-
-        #check that next_step_gnn1 is not a stop node
-        for i in range(batch_size):
-            if next_step_gnn1[i] == 12:
-                queues[i].pop(0) 
-       
-        #compute the gnn2 and apply softmax
-        output_gnn2_q = torch.softmax(model_q.GNN2(true_graphs,next_step_gnn1), dim = 1)
-        output_gnn2_a = torch.softmax(model_a.GNN2(true_graphs,next_step_gnn1),  dim = 1)
-        output_gnn2_pi = torch.softmax(model_pi.GNN2(true_graphs,next_step_gnn1), dim = 1)
-
-        #for each graph in the ouptut_gnn2_q we sample with a multinomial
-        next_step_gnn2 = torch.multinomial(output_gnn2_q, 1) #shape (batch_size, 1)
-
-        a_value = a_value * torch([output_gnn2_a[i][next_step_gnn2[i]] for i in range(batch_size)])
-        pi_value = pi_value * torch([output_gnn2_pi[i][next_step_gnn2[i]] for i in range(batch_size)])
-        q_value = q_value * torch([output_gnn2_q[i][next_step_gnn2[i]] for i in range(batch_size)])
-
-        true_graphs = append_node_link(true_graphs, next_step_gnn1, next_step_gnn2)
-        graph_for_gnn3 = encode_gnn3(true_graphs.deepcopy())
-        #this function also change who is the point of interest to switch to the latest added
-        
-        #compute the gnn3 and apply softmax to choose the neighbour
-        output_gnn3_q = torch.softmax(model_q.GNN3(graph_for_gnn3), dim = 1)
-        output_gnn3_a = torch.softmax(model_a.GNN3(graph_for_gnn3),  dim = 1)
-        output_gnn3_pi = torch.softmax(model_pi.GNN3(graph_for_gnn3), dim = 1)
-
-        #compute the softmax over the neighbor chosen to choose the kind of link
-
-        if next_step_gnn3 == 0 :#it is a stop,
-            #for the probability we compute it over all the node of the graph probability to stop
-            a_value
-        
-        else :
-            # multiply by two values, the one if the good neighbor is chosen and then if the good type of link 
-            pass
-
-            true_graphs = add_link_closness(true_graphs, node_linked,)
-    
     #now we can compute the features of the final molecule
     all_features_values = torch.zeros(batch_size, len(features)).to(device)
     for i,fn in enumerate(features.values()):
@@ -206,7 +127,7 @@ class GDCTrainer_path():
         self.q_update_interval = q_update_interval
 
         #### Compute lambdas
-        self.compute_optimal_lambdas(sample_size=self.params["moment_matching_sample_size"])
+        self.compute_optimal_lambdas()
 
 
     def compute_optimal_lambdas(self, sample_size=4096, n_iters=1000, lr=.5): #how do they define the learning rate and sample size maybe do more
@@ -233,6 +154,7 @@ class GDCTrainer_path():
         list_feature_tensor = []
         for i in  range(sample_size):
             #if we do multi processing, i think here the best 
+            #put pi without grad for lambdas
             batch_features_values, exponents, a_value, q_value, pi_value   = self.sampling_function(self.get_sampling_model(),
                                                                                                 self.get_eval_model(),
                                                                                                 self.get_policy_model(), 
@@ -293,7 +215,9 @@ class GDCTrainer_path():
         P_over_q = []
         P_over_pi = []
         pi_over_q = []
+        mean_loss = 0
         for k in range (number_samples):
+            loss = 0
             #if we do multi processing, i think here the best
             batch_features_values, exponents, a_value, q_value, pi_value = sample_path_from_model(self.get_sampling_model(),
                                                                                                 self.get_eval_model(),
@@ -307,11 +231,13 @@ class GDCTrainer_path():
 
             # compute the loss to trained the model
             loss += torch.sum(a_value*exponents / q_value * torch.log(pi_value))
-        loss = loss /(number_samples*self.batch_size)
-        loss.backward()
-        self.optimizer.step()
-        self.optimizer.zero_grad()
-
+            loss = loss /(self.batch_size)
+            loss.backward()
+            mean_loss += loss.item()
+            self.optimizer.step()
+            self.optimizer.zero_grad()
+            
+        mean_loss = mean_loss/number_samples
 
 
         P_over_q = torch.flatten(torch.stack(P_over_q))
@@ -371,6 +297,15 @@ class GDCTrainer_path():
 
         train_stats['q_updated?'] = was_q_updated
         self.iter += 1
+        return train_stats
+
+def run_steps(self, num_steps):
+        train_history = []
+        for _ in range(num_steps):
+            gc.collect()
+            torch.cuda.empty_cache()
+            train_stats = self.step()
+            train_history.append(train_stats)
 
 
-        
+        return train_history
