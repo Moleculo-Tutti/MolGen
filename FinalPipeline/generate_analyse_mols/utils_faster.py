@@ -35,7 +35,7 @@ from Model.GNN2 import ModelWithEdgeFeatures as GNN2
 from Model.GNN2 import ModelWithNodeConcat as GNN2_node_concat
 from Model.GNN3 import ModelWithEdgeFeatures as GNN3
 from Model.GNN3 import ModelWithgraph_embedding_modif as GNN3_embedding
-
+from Model.GNN3 import ModelWithgraph_embedding_close_or_not_without_node_embedding as GNN3_closing
 
 
 def tensor_to_smiles(node_features, edge_index, edge_attr, edge_mapping = 'aromatic', encoding_type = 'charged'):
@@ -119,6 +119,17 @@ def load_model(checkpoint_path, model, optimizer):
     
     return model, optimizer
 
+def load_model_3(checkpoint_path, model_1, model_2, optimizer_1, optimizer_2):
+
+    checkpoint = torch.load(checkpoint_path)
+    model_1.load_state_dict(checkpoint['model_graph_state_dict'])
+    model_2.load_state_dict(checkpoint['model_node_state_dict'])
+    optimizer_1.load_state_dict(checkpoint['optimizer_graph_state_dict'])
+    optimizer_2.load_state_dict(checkpoint['optimizer_node_state_dict'])
+
+    
+    return model_1, model_2, optimizer_1, optimizer_2
+
 def get_model_GNN1(config, encoding_size, edge_size):
 
     return GNN1(in_channels=encoding_size + int(config['feature_position'] + int(len(config['score_list']))),
@@ -157,6 +168,29 @@ def get_model_GNN3(config, encoding_size, edge_size):
                 hidden_channels_list=config["GCN_size"],
                 edge_channels=edge_size, 
                 use_dropout=config['use_dropout'])
+
+def get_model_GNN3_bis(config, encoding_size, edge_size):
+
+    GNN3_1 = GNN3_closing(
+                in_channels=encoding_size + int(config['feature_position'] + int(len(config['score_list']))),
+                hidden_channels_list=config["GCN_size"],
+                mlp_hidden_channels = config['mlp_hidden'],
+                edge_channels=edge_size,
+                num_classes=1,
+                use_dropout=config['use_dropout'],
+                size_info=config['use_size'],
+                max_size=config['max_size'])
+    GNN3_2 = GNN3_embedding(
+                in_channels=encoding_size + int(config['feature_position'] + int(len(config['score_list']))),
+                hidden_channels_list=config["GCN_size"],
+                mlp_hidden_channels = config['mlp_hidden'],
+                edge_channels=edge_size,
+                num_classes=2,
+                use_dropout=config['use_dropout'],
+                size_info=config['use_size'],
+                max_size=config['max_size'])
+    return GNN3_1, GNN3_2
+                    
 
 def get_optimizer(model, lr):
     return torch.optim.Adam(model.parameters(), lr=lr)
@@ -275,6 +309,35 @@ def select_node_batch(prediction, batch_data, edge_size, mask):
 
     return final_indices, max_indices
 
+
+def select_option_batch(choice_input, sigmoid_input, batch_data, mask):
+    unique_graph_ids = torch.unique(batch_data)
+    mask_location = batch_data[None, :] == unique_graph_ids[:, None]
+
+    # Multiply the softmax and the mask location
+    choice_masked = choice_input[None, :] * mask_location
+    choice_masked = choice_masked * mask[None, :]
+    choice_masked = choice_masked.masked_fill(torch.logical_or(~mask_location, ~mask[None, :]), float('-inf'))
+
+    # Apply softmax to the masked tensor
+    choice_softmax = F.softmax(choice_masked, dim=1)
+    # If all values in a row are nan (due to softmax of -inf), replace that row with uniform distribution
+    row_is_all_nan = torch.isnan(choice_softmax).all(dim=1)
+    default_values = torch.ones_like(choice_softmax[0, :]) / choice_softmax.size(1)  # uniform distribution
+    choice_softmax[row_is_all_nan, :] = default_values
+    # Sample with a multinomial distribution  
+    choice_sampled = torch.multinomial(choice_softmax, num_samples=1)
+
+    # Get the sigmoid values for the chosen nodes
+    chosen_sigmoid_values = sigmoid_input[choice_sampled.squeeze()]
+    # Generate random numbers for comparison
+    random_numbers = torch.rand(chosen_sigmoid_values.shape, device=chosen_sigmoid_values.device)
+    # Binary decision based on the sigmoid value: If the random number is less than the sigmoid value, choose 1
+    decision = (random_numbers < chosen_sigmoid_values).to(torch.long)
+
+
+    return choice_sampled, decision
+
 def add_nodes_and_edges_batch(batch, new_nodes, new_edges, current_nodes_batched, mask):
 
     device = batch.x.device
@@ -318,7 +381,6 @@ def add_edges_and_attributes(batch, edges_predicted, indices, mask, stopping_mas
     last_nodes_batch = torch.full(stopping_mask.shape, -1, device=batch.x.device)
 
     last_nodes_batch[stopping_mask] = last_indices
-
     new_edges_indices = torch.stack([mask_indices, last_nodes_batch[mask]], dim=0)
     new_edges_indices = torch.cat([new_edges_indices, new_edges_indices.flip(0)], dim=1)  # Making the edges bidirectional
 
@@ -540,6 +602,7 @@ class MolGenBatchFaster():
             prediction3 = self.GNN3(self.batch_mol_graph)
             
             softmax_prediction3 = F.softmax(prediction3, dim=1)
+            
             edges_predicted, max_indices = select_node_batch(softmax_prediction3, self.batch_mol_graph.batch, self.edge_size, mask)
             encoded_edges_predicted = torch.zeros((edges_predicted.shape[0], self.edge_size), device=self.device, dtype=torch.float)
 
@@ -619,6 +682,251 @@ class GenerationModuleBatchFaster():
         mol = MolGenBatchFaster(self.GNN1_model,
                      self.GNN2_model,
                      self.GNN3_model,
+                     self.encoding_size,
+                     self.edge_size,
+                     self.batch_size,
+                     self.feature_position,
+                     self.device,
+                     save_intermidiate_states=self.checking_mode,
+                     encoding_option=self.encoding_type,
+                     score_list=self.score_list,
+                     desired_score_list=self.desired_score_list)
+        mol.full_generation()
+             
+        finished_batch = mol.batch_mol_graph
+        # Extract molecules from the batch
+        mol_list = extract_all_graphs(finished_batch)
+        return mol_list
+
+    def generate_mol_list(self, n_mol, n_threads=1):
+        mol_list = []
+        if n_threads == 1:
+            for i in tqdm(range(n_mol), desc="Generating molecules"):
+                mol_graph = self.generate_single_molecule()
+                mol_list += mol_graph
+        else:
+
+            # Utilize ThreadPoolExecutor to parallelize the task
+            with ThreadPoolExecutor(max_workers=n_threads) as executor:
+                # Submit tasks to the thread pool
+                future_to_mol = {executor.submit(self.generate_single_molecule): i for i in range(n_mol)}
+                
+                # Collect the results as they become available
+                for future in tqdm(as_completed(future_to_mol), total=n_mol, desc="Generating molecules"):
+                    mol_graph = future.result()
+                    mol_list.append(mol_graph)
+                    
+        return mol_list
+    
+
+
+
+class MolGenBatchFasterDouble():
+    def __init__(self, GNN1, GNN2, GNN3_1, GNN3_2, encoding_size, edge_size, batch_size, feature_position, device, save_intermidiate_states = False, encoding_option = 'charged', score_list = [], desired_score_list = []):
+
+        batch_mol_graph = create_torch_graph_from_one_atom_batch(sample_first_atom_batch(batch_size = batch_size, encoding = encoding_option), edge_size=edge_size, encoding_option=encoding_option)
+        self.batch_mol_graph = batch_mol_graph.to(device) # Encoded in size 14 for the feature position
+        self.queues = torch.zeros(batch_size, dtype=torch.long, device=device)
+        self.node_counts = torch.zeros(batch_size, dtype=torch.long, device=device)
+        self.finished_mask = torch.zeros(batch_size, dtype=torch.bool, device=device)
+        self.batch_size = batch_size
+        self.GNN1 = GNN1
+        self.GNN2 = GNN2
+        self.GNN3_1 = GNN3_1
+        self.GNN3_2 = GNN3_2
+        self.device = device
+        self.feature_position = feature_position
+        self.encoding_size = encoding_size
+        self.edge_size = edge_size
+        self.save_intermidiate_states = save_intermidiate_states
+        if save_intermidiate_states:
+            self.intermidiate_states = []
+
+        self.score_list = score_list
+        self.desired_score_list = desired_score_list
+
+    def one_step(self):
+        with torch.no_grad():
+            
+            current_nodes = self.queues.clone()
+            
+            # Get the molecules that are finished which means that the number in the queue is superior to the number of nodes in the molecule
+            old_finished_mask = self.finished_mask
+            self.finished_mask = current_nodes > self.node_counts
+
+            # test if no molecule has changed from finished to unfinished
+            if torch.any(old_finished_mask & ~self.finished_mask):
+                print('error')
+                raise ValueError('error')
+            # If all the mask is True, then all the molecules are finished
+            if torch.all(self.finished_mask):
+                return 
+            """
+            Prepare the GNN 1 BATCH
+            """
+            current_nodes[self.finished_mask] = current_nodes[self.finished_mask] - 1
+            current_nodes_batched = return_current_nodes_batched(current_nodes, self.batch_mol_graph) #reindex the nodes to match the batch size
+            
+            self.batch_mol_graph.x[: , -2] = 0
+            # Do you -1 for the current nodes that are finished
+
+            self.batch_mol_graph.x[current_nodes_batched, -2] = 1
+
+            predictions = self.GNN1(self.batch_mol_graph)
+            
+            # Apply softmax to prediction
+            softmax_predictions = F.softmax(predictions, dim=1)
+
+            # Sample next node from prediction
+            predicted_nodes = torch.multinomial(softmax_predictions, num_samples=1)
+
+            # Create a mask for determining which graphs should continue to GNN2
+            mask_gnn2 = (predicted_nodes != self.encoding_size - 1).flatten()
+
+            # Handle the stopping condition (where predicted_node is encoding_size - 1)
+            stop_mask = (predicted_nodes == self.encoding_size - 1).flatten()
+                
+            # Increment the node count for graphs that haven't stopped and that are not finished
+            self.node_counts = self.node_counts + torch.logical_and(~stop_mask, ~self.finished_mask).long()
+
+            # Increment the queue for graphs that have been stopped and that are not finished
+            
+            self.queues = self.queues + torch.logical_and(stop_mask, ~self.finished_mask).long()
+
+            # Increment the feature position for graphs that have been stopped
+
+            self.batch_mol_graph = increment_feature_position(self.batch_mol_graph, current_nodes_batched, stop_mask)
+
+            # Encode next node for the entire batch
+            encoded_predicted_nodes = torch.zeros(predictions.size(), device=self.device, dtype=torch.float)
+            encoded_predicted_nodes.scatter_(1, predicted_nodes, 1)
+
+            #GNN2 
+                    
+            # add zeros to the neighbor because of the feature position
+            encoded_predicted_nodes = torch.cat([encoded_predicted_nodes, torch.zeros(self.batch_size, 1).to(encoded_predicted_nodes.device)], dim=1)
+
+            self.batch_mol_graph.neighbor = encoded_predicted_nodes
+
+            
+            predictions2 = self.GNN2(self.batch_mol_graph)
+            predicted_edges = torch.multinomial(F.softmax(predictions2, dim=1), num_samples=1)
+
+            encoded_predicted_edges = torch.zeros_like(predictions2, device=self.device, dtype=torch.float)
+            encoded_predicted_edges.scatter_(1, predicted_edges, 1)
+            
+            # Create a new node that is going to be added to the graph for each batch
+            new_nodes = torch.zeros(self.batch_size, self.encoding_size, device=self.device, dtype=torch.float)
+            new_nodes.scatter_(1, predicted_nodes, 1)
+
+            #GNN3
+
+            # Add the node and the edge to the graph
+            self.batch_mol_graph = add_nodes_and_edges_batch(self.batch_mol_graph, new_nodes, encoded_predicted_edges, current_nodes_batched, torch.logical_and(mask_gnn2, ~self.finished_mask))
+            
+
+            self.batch_mol_graph = set_last_nodes(self.batch_mol_graph, torch.sum(torch.logical_and(mask_gnn2, ~self.finished_mask), dim=0))            
+            mask = create_mask(self.batch_mol_graph, current_nodes_tensor = current_nodes_batched, last_prediction_size=torch.sum(torch.logical_and(mask_gnn2, ~self.finished_mask), dim=0))
+            self.batch_mol_graph.mask = mask
+        
+
+            prediction_closing = self.GNN3_1(self.batch_mol_graph)
+            
+            sigmoid_prediction3 = torch.sigmoid(prediction_closing)
+
+            random_number = torch.rand(sigmoid_prediction3.shape, device=self.device)
+
+            closing_mask = (random_number < sigmoid_prediction3).flatten()
+
+            chosing_prediction = self.GNN3_2(self.batch_mol_graph)
+            
+            choice_input = chosing_prediction[:, 1]
+            sigmoid_input = chosing_prediction[:, 0]
+
+            choosen_indexes, decision = select_option_batch(choice_input, sigmoid_input, self.batch_mol_graph.batch, mask)
+
+
+            encoded_edges_predicted = torch.zeros((decision.shape[0], self.edge_size), device=self.device, dtype=torch.float)
+
+            encoded_edges_predicted.scatter_(1, decision.unsqueeze(1), 1)
+
+            total_mask = torch.logical_and(torch.logical_and(closing_mask, mask_gnn2), ~self.finished_mask)
+
+            self.mol_graphs_list = add_edges_and_attributes(self.batch_mol_graph, encoded_edges_predicted, choosen_indexes.flatten(), total_mask, torch.logical_and(mask_gnn2, ~self.finished_mask))
+
+
+    def full_generation(self):
+        max_iter = 150
+        i = 0
+        while torch.all(self.finished_mask) == False:
+            if i > max_iter:
+                break
+            self.one_step()
+            i += 1
+            if self.save_intermidiate_states:
+                self.intermidiate_states.append(self.mol_graph.clone())
+        
+    def is_valid(self):
+        if self.edge_size == 3:
+            edge_mapping = 'kekulized'
+        else:
+            edge_mapping = 'aromatic'
+        SMILES_str = tensor_to_smiles(self.mol_graph.x, self.mol_graph.edge_index, self.mol_graph.edge_attr, edge_mapping, encoding_type=self.encoding_type)
+        mol = Chem.MolFromSmiles(SMILES_str)
+        if mol is None:
+            return False
+        else:
+            return True
+
+
+class GenerationModuleBatchFasterDouble():
+    def __init__(self, config1, config2, config3, encoding_size, edge_size, pathGNN1, pathGNN2, pathGNN3, checking_mode = False, encoding_type = 'charged', batch_size = 64, score_list = [], desired_score_list = []):
+        self.config1 = config1
+        self.config2 = config2
+        self.config3 = config3
+        self.encoding_size = encoding_size
+        self.edge_size = edge_size
+        self.batch_size = batch_size
+        self.encoding_type = encoding_type
+        self.feature_position = config1["feature_position"]
+        self.checking_mode = checking_mode
+
+        self.score_list = config1["score_list"]
+        self.desired_score_list = desired_score_list
+
+        if self.checking_mode:
+            self.non_valid_molecules = []
+
+        self.GNN1 = get_model_GNN1(config1, encoding_size, edge_size)
+        self.GNN2 = get_model_GNN2(config2, encoding_size, edge_size)
+        self.GNN3_1, self.GNN3_2 = get_model_GNN3_bis(config3, encoding_size, edge_size)
+
+        self.optimizer_GNN1 = torch.optim.Adam(self.GNN1.parameters(), lr=config1["lr"])
+        self.optimizer_GNN2 = torch.optim.Adam(self.GNN2.parameters(), lr=config2["lr"])
+        self.optimizer_GNN3_1 = torch.optim.Adam(self.GNN3_1.parameters(), lr=config3["lr"])
+        self.optimizer_GNN3_2 = torch.optim.Adam(self.GNN3_2.parameters(), lr=config3["lr"])
+
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.GNN1_model, self.optimizer_GNN1 = load_model(pathGNN1, self.GNN1, self.optimizer_GNN1)
+        self.GNN2_model, self.optimizer_GNN2 = load_model(pathGNN2, self.GNN2, self.optimizer_GNN2)
+        self.GNN3_1_model, self.GNN3_2_model, self.optimizer_GNN3_1, self.optimizer_GNN3_2 = load_model_3(pathGNN3, self.GNN3_1, self.GNN3_2, self.optimizer_GNN3_1, self.optimizer_GNN3_2)
+
+        self.GNN1_model.to(self.device)
+        self.GNN2_model.to(self.device)
+        self.GNN3_1_model.to(self.device)
+        self.GNN3_2_model.to(self.device)
+
+        self.GNN1_model.eval()
+        self.GNN2_model.eval()
+        self.GNN3_1_model.eval()
+        self.GNN3_2_model.eval()
+    
+    def generate_single_molecule(self):
+        mol = MolGenBatchFasterDouble(self.GNN1_model,
+                     self.GNN2_model,
+                     self.GNN3_1_model,
+                     self.GNN3_2_model,
                      self.encoding_size,
                      self.edge_size,
                      self.batch_size,

@@ -115,9 +115,8 @@ class ModelWithgraph_embedding_modif(torch.nn.Module):
             # Normalize num_node 
             num_nodes_per_graph = num_nodes_per_graph / self.max_size
 
-            graph_embedd= torch.cat((graph_embedd, num_nodes_per_graph), dim=1)
+            graph_embedd = torch.cat((graph_embedd, num_nodes_per_graph), dim=1)
         
-        num_nodes_per_graph = torch.bincount(batch).int()  # Nombre de nœuds par graphe
         graph_embed_rep = graph_embedd[batch]  # Répéter l'encodage pour chaque nœud du graphe
 
         # Two-layer MLP for classification
