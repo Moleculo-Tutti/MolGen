@@ -520,8 +520,8 @@ class TrainGNN3_bis():
                     criterion_graph=self.criterion_graph,
                     criterion_node_softmax=self.criterion_node_softmax)
                 
-                self.training_history.loc[epoch] = [epoch, loss, None, None, None, None, None, None]
-                self.eval_history.loc[epoch] = [epoch, None, None, None, None, None, None, None]
+                self.training_history.loc[epoch] = [epoch, loss, loss_graph, loss_node, None, None, None, None, None, None]
+                self.eval_history.loc[epoch] = [epoch, None, None, None, None, None, None, None, None, None]
 
             if save_epoch_graph:
                 checkpoint = {
