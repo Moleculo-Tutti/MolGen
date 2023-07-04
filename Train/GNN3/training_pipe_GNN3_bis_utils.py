@@ -293,7 +293,7 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
     return (
             total_loss /( val_metric_size* len(loader.dataset)),
             total_loss_graph /( val_metric_size* len(loader.dataset)),
-            total_loss_node /( val_metric_size* global_num_wanted_cycles),
+            total_loss_node /global_num_wanted_cycles,
             accuracy_num_cycles,
             precision_num_cycles, 
             recall_num_cycles, 
