@@ -250,27 +250,27 @@ def return_current_nodes_batched(current_node_tensor, graph_batch):
     result = torch.argmax(current_node_mask.int(), dim=1)
     return result
 
-def set_last_nodes(batch, last_prediction_size):
+def set_last_nodes(batch, last_prediction_size, encoding_size):
     # Reset the current node column
-    batch.x[:, -2] = 0
+    batch.x[:, encoding_size - 1] = 0
     # Set the last nodes to 1
-    batch.x[batch.x.shape[0] - last_prediction_size:, -2] = 1
+    batch.x[batch.x.shape[0] - last_prediction_size:, encoding_size - 1] = 1
     return batch
 
-def increment_feature_position(batch, current_nodes_batched, stop_mask):
+def increment_feature_position(batch, current_nodes_batched, stop_mask, encoding_size):
 
     stopped_current_nodes = current_nodes_batched[stop_mask]
 
-    batch.x[stopped_current_nodes, -1] = 1
+    batch.x[stopped_current_nodes, encoding_size] = 1
 
     return batch
 
 
 
 
-def create_mask(batch_graph, current_nodes_tensor : torch.tensor, last_prediction_size):
+def create_mask(batch_graph, current_nodes_tensor : torch.tensor, last_prediction_size, encoding_size):
     # Create a mask for the current nodes tensor    
-    feature_postion = batch_graph.x[:, -1]
+    feature_postion = batch_graph.x[:, encoding_size]
     mask = torch.logical_not(feature_postion.bool())
     # Set the last nodes to False
     mask[batch_graph.x.shape[0] - last_prediction_size:] = False
@@ -338,13 +338,19 @@ def select_option_batch(choice_input, sigmoid_input, batch_data, mask):
 
     return choice_sampled, decision
 
-def add_nodes_and_edges_batch(batch, new_nodes, new_edges, current_nodes_batched, mask):
-
+def add_nodes_and_edges_batch(batch, new_nodes, new_edges, current_nodes_batched, mask, score_tensor):
     device = batch.x.device
     # Add one zero to the end of the new_nodes
     new_nodes = torch.cat([new_nodes, torch.zeros(new_nodes.size(0), 1, device=new_nodes.device)], dim=1)
     # Add new nodes to the node attributes, considering the mask
     new_nodes_masked = new_nodes[mask]
+    # Test if score tensor is not empty
+    if score_tensor.nelement() != 0:
+        # Expand the score tensor to match the number of new nodes
+        score_tensor = score_tensor.expand(new_nodes_masked.shape[0], -1)
+        # Concatenate the score tensor to the new nodes
+        new_nodes_masked = torch.cat([new_nodes_masked, score_tensor], dim=1)
+
     batch.x = torch.cat([batch.x, new_nodes_masked], dim=0)
 
     # Create new edges between the current nodes and the new nodes in a bidirectional manner
@@ -477,7 +483,7 @@ def sample_first_atom_batch(batch_size, encoding = 'reduced'):
     atoms = [random.choices(list(prob_dict.keys()), weights=list(prob_dict.values()))[0] for _ in range(batch_size)]
     return atoms
 
-def create_torch_graph_from_one_atom_batch(atoms, edge_size, encoding_option='reduced') -> list:
+def create_torch_graph_from_one_atom_batch(atoms, edge_size, desired_score_tensor, encoding_option='reduced') -> list:
     graphs = []
     for atom in atoms:
         num_atom = int(atom)
@@ -485,6 +491,9 @@ def create_torch_graph_from_one_atom_batch(atoms, edge_size, encoding_option='re
         # Create graph
         # Increase the size of atom_attribute by one 
         atom_attribute = torch.cat((atom_attribute, torch.zeros(1)), dim=0)
+        # If desired_score_tensor is not empty, add it to the atom_attribute
+        if desired_score_tensor.nelement() != 0:
+            atom_attribute = torch.cat((atom_attribute, desired_score_tensor), dim=0)
         graph = torch_geometric.data.Data(x=atom_attribute.view(1, -1), edge_index=torch.empty((2, 0), dtype=torch.long), edge_attr=torch.empty((0, edge_size)))
         graphs.append(graph)
             
@@ -494,8 +503,9 @@ def create_torch_graph_from_one_atom_batch(atoms, edge_size, encoding_option='re
 
 class MolGenBatchFaster():
     def __init__(self, GNN1, GNN2, GNN3, encoding_size, edge_size, batch_size, feature_position, device, save_intermidiate_states = False, encoding_option = 'charged', score_list = [], desired_score_list = []):
-
-        batch_mol_graph = create_torch_graph_from_one_atom_batch(sample_first_atom_batch(batch_size = batch_size, encoding = encoding_option), edge_size=edge_size, encoding_option=encoding_option)
+        
+        self.desired_score_tensor = torch.tensor(desired_score_list, dtype=torch.float)
+        batch_mol_graph = create_torch_graph_from_one_atom_batch(sample_first_atom_batch(batch_size = batch_size, encoding = encoding_option), edge_size=edge_size, desired_score_tensor=self.desired_score_tensor, encoding_option=encoding_option)
         self.batch_mol_graph = batch_mol_graph.to(device) # Encoded in size 14 for the feature position
         self.queues = torch.zeros(batch_size, dtype=torch.long, device=device)
         self.node_counts = torch.zeros(batch_size, dtype=torch.long, device=device)
@@ -513,8 +523,7 @@ class MolGenBatchFaster():
             self.intermidiate_states = []
 
         self.score_list = score_list
-        self.desired_score_list = desired_score_list
-
+        self.desired_score_tensor= self.desired_score_tensor.to(device)
     def one_step(self):
         with torch.no_grad():
             
@@ -537,11 +546,10 @@ class MolGenBatchFaster():
             current_nodes[self.finished_mask] = current_nodes[self.finished_mask] - 1
             current_nodes_batched = return_current_nodes_batched(current_nodes, self.batch_mol_graph) #reindex the nodes to match the batch size
             
-            self.batch_mol_graph.x[: , -2] = 0
+            self.batch_mol_graph.x[: , self.encoding_size - 1] = 0
             # Do you -1 for the current nodes that are finished
 
-            self.batch_mol_graph.x[current_nodes_batched, -2] = 1
-
+            self.batch_mol_graph.x[current_nodes_batched, self.encoding_size - 1] = 1
             predictions = self.GNN1(self.batch_mol_graph)
             
             # Apply softmax to prediction
@@ -565,7 +573,7 @@ class MolGenBatchFaster():
 
             # Increment the feature position for graphs that have been stopped
 
-            self.batch_mol_graph = increment_feature_position(self.batch_mol_graph, current_nodes_batched, stop_mask)
+            self.batch_mol_graph = increment_feature_position(self.batch_mol_graph, current_nodes_batched, stop_mask, self.encoding_size)
 
             # Encode next node for the entire batch
             encoded_predicted_nodes = torch.zeros(predictions.size(), device=self.device, dtype=torch.float)
@@ -574,7 +582,7 @@ class MolGenBatchFaster():
             #GNN2 
                     
             # add zeros to the neighbor because of the feature position
-            encoded_predicted_nodes = torch.cat([encoded_predicted_nodes, torch.zeros(self.batch_size, 1).to(encoded_predicted_nodes.device)], dim=1)
+            encoded_predicted_nodes = torch.cat([encoded_predicted_nodes, torch.zeros(self.batch_size, 1).to(encoded_predicted_nodes.device), torch.zeros(self.batch_size, self.desired_score_tensor.size()[0]).to(encoded_predicted_nodes.device)], dim=1)
 
             self.batch_mol_graph.neighbor = encoded_predicted_nodes
 
@@ -591,11 +599,11 @@ class MolGenBatchFaster():
             #GNN3
 
             # Add the node and the edge to the graph
-            self.batch_mol_graph = add_nodes_and_edges_batch(self.batch_mol_graph, new_nodes, encoded_predicted_edges, current_nodes_batched, torch.logical_and(mask_gnn2, ~self.finished_mask))
+            self.batch_mol_graph = add_nodes_and_edges_batch(self.batch_mol_graph, new_nodes, encoded_predicted_edges, current_nodes_batched, torch.logical_and(mask_gnn2, ~self.finished_mask), score_tensor=self.desired_score_tensor)
             
 
-            self.batch_mol_graph = set_last_nodes(self.batch_mol_graph, torch.sum(torch.logical_and(mask_gnn2, ~self.finished_mask), dim=0))            
-            mask = create_mask(self.batch_mol_graph, current_nodes_tensor = current_nodes_batched, last_prediction_size=torch.sum(torch.logical_and(mask_gnn2, ~self.finished_mask), dim=0))
+            self.batch_mol_graph = set_last_nodes(self.batch_mol_graph, torch.sum(torch.logical_and(mask_gnn2, ~self.finished_mask), dim=0), self.encoding_size)           
+            mask = create_mask(self.batch_mol_graph, current_nodes_tensor = current_nodes_batched, last_prediction_size=torch.sum(torch.logical_and(mask_gnn2, ~self.finished_mask), dim=0), encoding_size=self.encoding_size)
             self.batch_mol_graph.mask = mask
         
 
@@ -719,6 +727,20 @@ class GenerationModuleBatchFaster():
         return mol_list
     
 
+def add_score_features_batch(graph, scores_list, desired_scores_list, GNN_type = 1):
+
+    if scores_list != []:
+        assert len(scores_list) == len(desired_scores_list) 
+        # If 
+        for i, score in enumerate(scores_list):
+            score_tensor = torch.tensor(desired_scores_list[i], dtype=torch.float).view(1, 1)
+            # Duplicate the score tensor to match the number of nodes in the subgraph
+            score_tensor = score_tensor.repeat(graph.x.size(0), 1)
+            graph.x = torch.cat([graph.x, score_tensor], dim=-1)
+        if GNN_type == 2:
+            # Concat zeros to all the neighbors of the graph 
+            graph.neighbor = torch.cat([graph.neighbor, torch.zeros((graph.neighbor.size(0), len(scores_list)))], dim=-1)
+    return graph
 
 
 class MolGenBatchFasterDouble():
@@ -743,7 +765,7 @@ class MolGenBatchFasterDouble():
             self.intermidiate_states = []
 
         self.score_list = score_list
-        self.desired_score_list = desired_score_list
+        self.desired_score_tensor = torch.tensor(desired_score_list, dtype=torch.float).view(1, 1)
 
     def one_step(self):
         with torch.no_grad():
@@ -767,10 +789,14 @@ class MolGenBatchFasterDouble():
             current_nodes[self.finished_mask] = current_nodes[self.finished_mask] - 1
             current_nodes_batched = return_current_nodes_batched(current_nodes, self.batch_mol_graph) #reindex the nodes to match the batch size
             
-            self.batch_mol_graph.x[: , -2] = 0
+            self.batch_mol_graph.x[: , self.encoding_size - 1] = 0
             # Do you -1 for the current nodes that are finished
 
-            self.batch_mol_graph.x[current_nodes_batched, -2] = 1
+            self.batch_mol_graph.x[current_nodes_batched, self.encoding_size - 1] = 1
+
+            # Add score features if needed
+
+
 
             predictions = self.GNN1(self.batch_mol_graph)
             
@@ -795,7 +821,7 @@ class MolGenBatchFasterDouble():
 
             # Increment the feature position for graphs that have been stopped
 
-            self.batch_mol_graph = increment_feature_position(self.batch_mol_graph, current_nodes_batched, stop_mask)
+            self.batch_mol_graph = increment_feature_position(self.batch_mol_graph, current_nodes_batched, stop_mask, self.encoding_size)
 
             # Encode next node for the entire batch
             encoded_predicted_nodes = torch.zeros(predictions.size(), device=self.device, dtype=torch.float)
@@ -822,11 +848,11 @@ class MolGenBatchFasterDouble():
             #GNN3
 
             # Add the node and the edge to the graph
-            self.batch_mol_graph = add_nodes_and_edges_batch(self.batch_mol_graph, new_nodes, encoded_predicted_edges, current_nodes_batched, torch.logical_and(mask_gnn2, ~self.finished_mask))
+            self.batch_mol_graph = add_nodes_and_edges_batch(self.batch_mol_graph, new_nodes, encoded_predicted_edges, current_nodes_batched, torch.logical_and(mask_gnn2, ~self.finished_mask), self.desired_score_tensor)
             
 
-            self.batch_mol_graph = set_last_nodes(self.batch_mol_graph, torch.sum(torch.logical_and(mask_gnn2, ~self.finished_mask), dim=0))            
-            mask = create_mask(self.batch_mol_graph, current_nodes_tensor = current_nodes_batched, last_prediction_size=torch.sum(torch.logical_and(mask_gnn2, ~self.finished_mask), dim=0))
+            self.batch_mol_graph = set_last_nodes(self.batch_mol_graph, torch.sum(torch.logical_and(mask_gnn2, ~self.finished_mask), dim=0), self.encoding_size)       
+            mask = create_mask(self.batch_mol_graph, current_nodes_tensor = current_nodes_batched, last_prediction_size=torch.sum(torch.logical_and(mask_gnn2, ~self.finished_mask), dim=0), encoding_size=self.encoding_size)
             self.batch_mol_graph.mask = mask
         
 
