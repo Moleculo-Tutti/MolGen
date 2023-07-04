@@ -341,7 +341,8 @@ class TrainGNN1():
                 torch.save(checkpoint, epoch_save_file)
 
                 training_csv_directory = os.path.join(self.directory_path_experience, 'training_history.csv')
-                self.training_history.to_csv(training_csv_directory)   
+                # Save the training history and erease the previous one
+                self.training_history.to_csv(training_csv_directory)
 
                 eval_csv_directory = os.path.join(self.directory_path_experience, 'eval_history.csv')    
                 self.eval_history.to_csv(eval_csv_directory)
