@@ -69,6 +69,7 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer_graph, opti
 
         loss_graph = criterion_graph(close, supposed_close_label)
         loss_graph.backward()
+        optimizer_graph.step()
         total_loss_graph += loss_graph.item() * data.num_graphs
 
         #we combine the mask with the supposed_close, if a graph is supposed_closed (no cycle to make) all these nodes are added to the mask
@@ -118,7 +119,6 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer_graph, opti
 
         loss = loss_where + loss_which_type
         loss.backward()
-        optimizer_graph.step()
         optimizer_node.step()
         total_loss_node += loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
         total_loss += loss_graph.item() * data.num_graphs +loss_where.item() * data.num_graphs + loss_which_type.item() * data.num_graphs
@@ -159,10 +159,12 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer_graph, opti
         f1_score_num_cycles = 0
     else:
         f1_score_num_cycles = 2 * precision_num_cycles * recall_num_cycles / (precision_num_cycles + recall_num_cycles)
-    del global_cycles_predicted, global_num_wanted_cycles, global_non_cycles_well_predicted, global_cycles_well_predicted, global_well_placed_cycles, global_well_type_cycles, total_graphs_processed
+    del global_cycles_predicted, global_non_cycles_well_predicted, global_cycles_well_predicted, global_well_placed_cycles, global_well_type_cycles, total_graphs_processed
     if epoch_metric: 
         return (
             total_loss / len(loader.dataset),
+            total_loss_graph / len(loader.dataset),
+            total_loss_node / global_num_wanted_cycles,
             accuracy_num_cycles,
             precision_num_cycles, 
             recall_num_cycles, 
@@ -286,10 +288,12 @@ def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_
     accuracy_neighhbor_chosen = global_well_placed_cycles / global_num_wanted_cycles
     accuracy_type_chosen = global_well_type_cycles / global_num_wanted_cycles
     f1_score_num_cycles = 2 * precision_num_cycles * recall_num_cycles / (precision_num_cycles + recall_num_cycles)
-    del global_cycles_predicted, global_num_wanted_cycles, global_non_cycles_well_predicted, global_cycles_well_predicted, global_well_placed_cycles, global_well_type_cycles, total_graphs_processed
+    del global_cycles_predicted, global_non_cycles_well_predicted, global_cycles_well_predicted, global_well_placed_cycles, global_well_type_cycles, total_graphs_processed
 
     return (
             total_loss /( val_metric_size* len(loader.dataset)),
+            total_loss_graph /( val_metric_size* len(loader.dataset)),
+            total_loss_node /( val_metric_size* global_num_wanted_cycles),
             accuracy_num_cycles,
             precision_num_cycles, 
             recall_num_cycles, 
@@ -345,22 +349,30 @@ class TrainGNN3_bis():
         self.criterion_node_softmax = nn.CrossEntropyLoss()
         self.criterion_graph = nn.BCEWithLogitsLoss()
 
-        self.training_history = pd.DataFrame(columns=['epoch', 'loss', 'accuracy_num_cycles', 'precision_num_cycles', 'recall_num_cycles', 'accuracy_neighhbor_chosen' , 'accuracy_type_chosen', 'f1_score_num_cycles'])
-        self.eval_history = pd.DataFrame(columns=['epoch', 'loss', 'accuracy_num_cycles', 'precision_num_cycles', 'recall_num_cycles', 'accuracy_neighhbor_chosen' , 'accuracy_type_chosen', 'f1_score_num_cycles'])
+        self.training_history = pd.DataFrame(columns=['epoch', 'loss', 'loss_graph', 'loss_node', 'accuracy_num_cycles', 'precision_num_cycles', 'recall_num_cycles', 'accuracy_neighhbor_chosen' , 'accuracy_type_chosen', 'f1_score_num_cycles'])
+        self.eval_history = pd.DataFrame(columns=['epoch', 'loss', 'loss_graph', 'loss_node', 'accuracy_num_cycles', 'precision_num_cycles', 'recall_num_cycles', 'accuracy_neighhbor_chosen' , 'accuracy_type_chosen', 'f1_score_num_cycles'])
 
         self.prepare_saving()
 
         # Store the 6 best models
-        self.six_best_eval_loss = [(0, float('inf'))] * 6
+        self.six_best_eval_loss_graph = [(0, float('inf'))] * 6
+        self.six_best_eval_loss_node = [(0, float('inf'))] * 6
+
 
         if self.continue_training:
             # Open the six best eval loss
-            with open(os.path.join(self.directory_path_experience, 'six_best_epochs.txt'), 'r') as f:
+            with open(os.path.join(self.directory_path_experience, 'six_best_epochs_graph.txt'), 'r') as f:
                 for i in range(6):
                     line = f.readline()
                     epoch, loss = line.split(' with loss ')  # Utilisez ' with loss ' comme séparateur
                     epoch = epoch.split('Epoch ')[1]  # Supprimez 'Epoch ' de la valeur de l'époque
-                    self.six_best_eval_loss[i] = (int(epoch), float(loss))
+                    self.six_best_eval_loss_graph[i] = (int(epoch), float(loss))
+            with open(os.path.join(self.directory_path_experience, 'six_best_epochs_node.txt'), 'r') as f:
+                for i in range(6):
+                    line = f.readline()
+                    epoch, loss = line.split(' with loss ')
+                    epoch = epoch.split('Epoch ')[1]
+                    self.six_best_eval_loss_node[i] = (int(epoch), float(loss))
 
     def load_data_model(self):
         # Load the data
@@ -444,9 +456,12 @@ class TrainGNN3_bis():
         
         for epoch in tqdm(range(self.begin_epoch, self.n_epochs+1)):
             torch.cuda.empty_cache()
-            save_epoch = False
+            save_epoch_graph = False
+            save_epoch_node = False
+            save_csv = False
             if epoch % self.every_epoch_metric == 0:
-                loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles= train_one_epoch(
+                save_csv = True
+                loss,loss_graph, loss_node, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles= train_one_epoch(
                     loader=self.loader_train,
                     model_node=self.model_node,
                     size_edge=self.edge_size,
@@ -460,9 +475,9 @@ class TrainGNN3_bis():
                     criterion_graph=self.criterion_graph,
                     criterion_node_softmax=self.criterion_node_softmax)
                     
-                self.training_history.loc[epoch] = [epoch, loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles]
+                self.training_history.loc[epoch] = [epoch, loss, loss_graph, loss_node, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles]
 
-                loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles = eval_one_epoch(
+                loss, loss_graph, loss_node, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles = eval_one_epoch(
                     loader=self.loader_val,
                     model_node=self.model_node,
                     size_edge=self.edge_size,
@@ -478,14 +493,20 @@ class TrainGNN3_bis():
                 
                 # Check if the loss is better than one of the 6 best losses (compare only along the second dimension of the tuples)
 
-                if loss < max(self.six_best_eval_loss, key=lambda x: x[1])[1]:
+                if loss_graph < max(self.six_best_eval_loss_graph, key=lambda x: x[1])[1]:
                     # switch the save variable to True
-                    save_epoch = True
-                    index_max = self.six_best_eval_loss.index(max(self.six_best_eval_loss, key=lambda x: x[1]))
-                    self.six_best_eval_loss[index_max] = (epoch, loss)
+                    save_epoch_graph = True
+                    index_max_graph = self.six_best_eval_loss_graph.index(max(self.six_best_eval_loss_graph, key=lambda x: x[1]))
+                    self.six_best_eval_loss_graph[index_max_graph] = (epoch, loss_graph)
+                
+                if loss_node < max(self.six_best_eval_loss_node, key=lambda x: x[1])[1]:
+                    # switch the save variable to True
+                    save_epoch_node = True
+                    index_max_node = self.six_best_eval_loss_node.index(max(self.six_best_eval_loss_node, key=lambda x: x[1]))
+                    self.six_best_eval_loss_node[index_max_node] = (epoch, loss_node)
                 
             else:
-                loss, _, _, _, _, _, _,  = train_one_epoch(
+                loss, loss_graph, loss_node, _, _, _, _, _, _ = train_one_epoch(
                     loader=self.loader_train,
                     model_node=self.model_node,
                     size_edge=self.edge_size,
@@ -502,17 +523,21 @@ class TrainGNN3_bis():
                 self.training_history.loc[epoch] = [epoch, loss, None, None, None, None, None, None]
                 self.eval_history.loc[epoch] = [epoch, None, None, None, None, None, None, None]
 
-            if save_epoch:
+            if save_epoch_graph:
                 checkpoint = {
                     'epoch': epoch,
-                    'model_node_state_dict': self.model_node.state_dict(),
                     'model_graph_state_dict': self.model_graph.state_dict(),
-                    'optimizer_graph_state_dict': self.optimizer_graph.state_dict(),
-                    'optimizer_node_state_dict': self.optimizer_node.state_dict()}
+                    'optimizer_graph_state_dict': self.optimizer_graph.state_dict()}
 
-                epoch_save_file = os.path.join(self.directory_path_epochs, f'checkpoint_{index_max}.pt')
+                epoch_save_file = os.path.join(self.directory_path_epochs, f'checkpoint_graph{index_max_graph}.pt')
                 torch.save(checkpoint, epoch_save_file)
+                six_best_epochs_file = os.path.join(self.directory_path_experience, 'six_best_epochs_graph.txt')
+                with open(six_best_epochs_file, 'w') as file:
+                    for epoch, loss_graph in self.six_best_eval_loss_graph:
+                        file.write(f'Epoch {epoch} with loss {loss_graph}\n')
+                del checkpoint, epoch_save_file, six_best_epochs_file, file
 
+            if save_csv:
                 training_csv_directory = os.path.join(self.directory_path_experience, 'training_history.csv')
 
                 self.training_history.to_csv(training_csv_directory)   
@@ -522,11 +547,23 @@ class TrainGNN3_bis():
                 self.eval_history.to_csv(eval_csv_directory)
 
                 # Create a txt file containing the infos about the six best epochs saved 
-                six_best_epochs_file = os.path.join(self.directory_path_experience, 'six_best_epochs.txt')
+
+                del training_csv_directory, eval_csv_directory
+            
+            if save_epoch_node:
+                checkpoint = {
+                    'epoch': epoch,
+                    'model_node_state_dict': self.model_node.state_dict(),
+                    'optimizer_node_state_dict': self.optimizer_node.state_dict()}
+
+                epoch_save_file = os.path.join(self.directory_path_epochs, f'checkpoint_node{index_max_node}.pt')
+                torch.save(checkpoint, epoch_save_file)
+                six_best_epochs_file = os.path.join(self.directory_path_experience, 'six_best_epochs_node.txt')
                 with open(six_best_epochs_file, 'w') as file:
-                    for epoch, loss in self.six_best_eval_loss:
-                        file.write(f'Epoch {epoch} with loss {loss}\n')
-                del checkpoint, epoch_save_file, six_best_epochs_file, training_csv_directory, eval_csv_directory, file
-            del loss
+                    for epoch, loss_node in self.six_best_eval_loss_node:
+                        file.write(f'Epoch {epoch} with loss {loss_node}\n')
+                del checkpoint, epoch_save_file, six_best_epochs_file, file
+
+            del loss, loss_graph, loss_node
             gc.collect()
                         
