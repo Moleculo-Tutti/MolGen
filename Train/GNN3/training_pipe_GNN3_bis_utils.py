@@ -174,7 +174,7 @@ def train_one_epoch(loader, model_node, size_edge, device, optimizer_graph, opti
     
 
     else:
-        return total_loss / len(loader.dataset), None, None, None, None, None, None
+        return total_loss / len(loader.dataset), total_loss_graph / len(loader.dataset), total_loss_node / global_num_wanted_cycles,None, None, None, None, None, None
 
 
 def eval_one_epoch(loader, model_node, size_edge, device, criterion_node, print_bar=False, val_metric_size=1, model_graph=None, criterion_graph = None,criterion_node_softmax = None):
