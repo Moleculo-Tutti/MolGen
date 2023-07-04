@@ -489,7 +489,7 @@ class TrainGNN3_bis():
                     criterion_graph=self.criterion_graph,
                     criterion_node_softmax=self.criterion_node_softmax)
                 
-                self.eval_history.loc[epoch] = [epoch,loss, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles]
+                self.eval_history.loc[epoch] = [epoch,loss, loss_graph, loss_node, accuracy_num_cycles, precision_num_cycles, recall_num_cycles, accuracy_neighhbor_chosen , accuracy_type_chosen, f1_score_num_cycles]
                 
                 # Check if the loss is better than one of the 6 best losses (compare only along the second dimension of the tuples)
 
