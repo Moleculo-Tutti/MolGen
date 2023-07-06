@@ -181,3 +181,14 @@ class Model_GNNs():
         self.GNN2_model.eval()
         self.GNN3_1_model.eval()
         self.GNN3_2_model.eval()
+    
+    def get_state_dict(self):
+        # Return a list of the state dict of the models
+        return [self.GNN1_model.state_dict(), self.GNN2_model.state_dict(), self.GNN3_1_model.state_dict(), self.GNN3_2_model.state_dict()]
+    
+    def load_from_state_dict(self, state_dict):
+        # Load the models from a list of state dict
+        self.GNN1_model.load_state_dict(state_dict[0])
+        self.GNN2_model.load_state_dict(state_dict[1])
+        self.GNN3_1_model.load_state_dict(state_dict[2])
+        self.GNN3_2_model.load_state_dict(state_dict[3])

@@ -180,13 +180,16 @@ class GDCTrainer_path():
             # Check if there is a zero in the tensor q, a or pi
 
             if (q_value == 0).any():
-                print(q_value)
+                # Add a tensor of 1e-38 on all the values of q
+                q_value = q_value + torch.ones_like(q_value) * float('1e-38')
 
             if (a_value == 0).any():
-                print(a_value)
+                # Add a tensor of 1e-38 on all the values of a
+                a_value = a_value + torch.ones_like(a_value) * float('1e-38')
             
             if (pi_value == 0).any():
-                print(pi_value)
+                # Add a tensor of 1e-38 on all the values of pi
+                pi_value = pi_value + torch.ones_like(pi_value) * float('1e-38')
 
             assert self.Module_Gen.GNNs_Models_q.GNN1_model.training == False
             assert self.Module_Gen.GNNs_Models_q.GNN2_model.training == False
@@ -257,16 +260,11 @@ class GDCTrainer_path():
         print('dkl_p_pi: ', dkl_p_pi)
         print('dkl_p_q: ', dkl_p_q)
         
-        """
-        if self.q_update_criterion == 'interval' :
-            if (self.iter+1) % self.q_update_interval == 0:
-                print("was_q_updated")
-                self.ref_model.load_state_dict(self.model.state_dict())
-                was_q_updated = True
-        elif self.q_update_criterion in ['kld', 'tvd'] and (self.iter+1) % self.q_update_interval == 0:
+
+        if self.q_update_criterion in ['kld', 'tvd']:
             if self.q_update_criterion == 'kld':
                 if dkl_p_pi < dkl_p_q:
-                    self.ref_model.load_state_dict(self.model.state_dict())
+                    self.Module_Gen.GNNs_Models_q.load_from_state_dict(self.Module_Gen.GNNs_Models_pi.get_state_dict())
                     if dkl_p_pi < self.min_kld:
                         self.min_kld = dkl_p_pi
                     was_q_updated = True
@@ -277,7 +275,7 @@ class GDCTrainer_path():
             if self.q_update_criterion == 'tvd':
                 
                 if tvd_p_pi < tvd_p_q:
-                    self.ref_model.load_state_dict(self.model.state_dict())
+                    self.Module_Gen.GNNs_Models_q.load_from_state_dict(self.Module_Gen.GNNs_Models_pi.get_state_dict())
                     if tvd_p_pi < self.min_tvd:
                         self.min_tvd = tvd_p_pi
                     was_q_updated = True
@@ -300,7 +298,6 @@ class GDCTrainer_path():
         train_stats['q_updated?'] = was_q_updated
         self.iter += 1
         return train_stats
-        """
     def run_steps(self, num_steps, num_batches, num_mini_batches):
             self.Module_Gen.batch_size = self.minibatch_size
             train_history = []
