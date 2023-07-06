@@ -66,6 +66,12 @@ def get_n_rings(mol):
     """
     return mol.GetRingInfo().NumRings()
 
+def size(mol):
+    """
+    Computes the size of a molecule
+    """
+    return mol.GetNumAtoms()
+
 def average_agg_tanimoto(stock_vecs, gen_vecs,
                          batch_size=5000, agg='max',
                          device='cpu', p=1):

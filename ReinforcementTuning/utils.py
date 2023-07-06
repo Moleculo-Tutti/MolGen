@@ -15,36 +15,6 @@ from torch_geometric.data import Data, Batch
 
 
 
-def create_torch_graph_from_one_atom(atom, edge_size, encoding_option='charged'):
-    num_atom = int(atom)
-
-    atom_attribute = node_encoder(num_atom, encoding_option=encoding_option)
-    # Create graph
-    graph = torch_geometric.data.Data(x=atom_attribute.view(1, -1), edge_index=torch.empty((2, 0), dtype=torch.long), edge_attr=torch.empty((0, edge_size)))
-
-    return graph
-
-def sample_first_atom(encoding = 'charged'):
-    if encoding == 'reduced' or encoding == 'charged':
-        prob_dict = {'60': 0.7385023585929047, 
-                    '80': 0.1000143018658728, 
-                    '70': 0.12239949901813525, 
-                    '90': 0.013786373862576426, 
-                    '160': 0.017856330814654413,
-                    '170': 0.007441135845856433}
-    if encoding == 'polymer':
-        prob_dict = {'60': 0.7489344573582472,
-                    '70': 0.0561389266682314,
-                    '80': 0.0678638375933265,
-                    '160': 0.08724385192820308,
-                    '90': 0.032130486119902095,
-                    '140': 0.007666591133009364,
-                    '150': 2.184919908044154e-05}
-
-    
-    return random.choices(list(prob_dict.keys()), weights=list(prob_dict.values()))[0]
-
-
 def sample_path_from_model(model_q, model_a, model_pi,features,lambdas, batch_size = 128, device = 'cuda',  edge_size= 3 ):
     #this function compute a batch of x ( so paths) and the corresponding q(x), a(x), pi(x)
     #it also compute the features of the final molecule so that we can compute the exponents
@@ -75,7 +45,7 @@ def sample_path_from_model(model_q, model_a, model_pi,features,lambdas, batch_si
     # all_features_values is of size (batch_size, len(features))
 
 
-
+ 
 class GDCTrainer_path():
     #implement a finetuning of our odel (which is concatenation of 3 GNN) with a Gradient distributional policy program
     def get_sampling_model(self):

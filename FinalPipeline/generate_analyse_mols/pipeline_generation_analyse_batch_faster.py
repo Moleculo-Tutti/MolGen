@@ -19,7 +19,7 @@ sys.path.append(parent_dir)
 sys.path.append(parent_parent_dir)
 
 from utils_faster import GenerationModuleBatchFaster, tensor_to_smiles
-from metrics.utils import canonic_smiles, SA, logP, QED, weight, get_n_rings, calculate_novelty, calculate_uniqueness, calculate_validity
+from metrics.utils import canonic_smiles, SA, logP, QED, weight, size, get_n_rings, calculate_novelty, calculate_uniqueness, calculate_validity
 from ploting_utils import save_plot_metrics
 import concurrent
 
@@ -28,7 +28,7 @@ import concurrent
 
 GENERATED_SAVING_DIR = Path('..') / 'generated_mols' / 'raw'
 SCORED_SAVING_DIR = Path('..') / 'generated_mols' / 'scored'
-ZINC_DATA_PATH = SCORED_SAVING_DIR / 'scored_zinc.csv'
+ZINC_DATA_PATH = SCORED_SAVING_DIR / 'scored_zinc_filtered.csv'
 
 SAVE_RESULTS_PATH = Path('..') / 'generate_analyse_mols' / 'results'
 
@@ -66,6 +66,7 @@ def compute_scores(smiles):
         'logP': logP(mol),
         'QED': QED(mol),
         'weight': weight(mol),
+        'size': size(mol),
         'n_rings': get_n_rings(mol)
     }
 
@@ -106,6 +107,8 @@ def calculate_statistics(data, zinc_data, file_path):
         'QED std': data['QED'].std(),
         'Weight mean': data['weight'].mean(),
         'Weight std': data['weight'].std(),
+        'Size mean': data['size'].mean(),
+        'Size std': data['size'].std(),
         'Number of rings mean': data['n_rings'].mean(),
         'Number of rings std': data['n_rings'].std(),
         'Wasserstein distance SA': wasserstein_distance(data['SA'], zinc_data['SA']),
@@ -128,6 +131,8 @@ def calculate_statistics(data, zinc_data, file_path):
         'QED std': zinc_data['QED'].std(),
         'Weight mean': zinc_data['weight'].mean(),
         'Weight std': zinc_data['weight'].std(),
+        'Size mean': zinc_data['size'].mean(),
+        'Size std': zinc_data['size'].std(),
         'Number of rings mean': zinc_data['n_rings'].mean(),
         'Number of rings std': zinc_data['n_rings'].std()
     }

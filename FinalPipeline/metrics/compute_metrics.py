@@ -1,16 +1,15 @@
 import argparse
 import pandas as pd
 from pathlib import Path
-from utils import canonic_smiles, SA, logP, QED, weight, get_n_rings
+from utils import canonic_smiles, SA, logP, QED, weight, size, get_n_rings
 from tqdm import tqdm
 import concurrent.futures
 
 from rdkit import Chem
-
-data_path = Path('..') / 'generated_mols' / 'generated_molecules_1000_True_charged_GNN_scored_logp_[2.45].csv'
+data_path = Path('..') / 'generated_mols' / 'scored' / 'scored_zinc_filtered.csv'
 output_dir = Path('..') / 'generated_mols' / 'scored' 
 
-smiles_col = 'SMILES'
+smiles_col = 'smiles'
 
 
 def compute_metrics(smiles):
@@ -23,6 +22,7 @@ def compute_metrics(smiles):
             'logP': None,
             'QED': None,
             'weight': None,
+            'size': None,
             'n_rings': None
         }
     return {
@@ -31,6 +31,7 @@ def compute_metrics(smiles):
         'logP': logP(mol),
         'QED': QED(mol),
         'weight': weight(mol),
+        'size': size(mol),
         'n_rings': get_n_rings(mol)
     }
 
@@ -56,10 +57,11 @@ def main(args, n_threads=4):
     data['logP'] = [metrics['logP'] for metrics in metrics_list]
     data['QED'] = [metrics['QED'] for metrics in metrics_list]
     data['weight'] = [metrics['weight'] for metrics in metrics_list]
+    data['size'] = [metrics['size'] for metrics in metrics_list]
     data['n_rings'] = [metrics['n_rings'] for metrics in metrics_list]
     
     # Save to output_dir
-    data.to_csv(output_dir / 'generated_molecules_1000_True_charged_GNN_scored_logp_[2.45]_scored.csv', index=False)
+    data.to_csv(output_dir / 'zinc_scored_filtered.csv', index=False)
 
 
 if __name__ == '__main__':

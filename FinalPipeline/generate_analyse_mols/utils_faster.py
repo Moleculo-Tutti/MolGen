@@ -746,7 +746,8 @@ def add_score_features_batch(graph, scores_list, desired_scores_list, GNN_type =
 class MolGenBatchFasterDouble():
     def __init__(self, GNN1, GNN2, GNN3_1, GNN3_2, encoding_size, edge_size, batch_size, feature_position, device, save_intermidiate_states = False, encoding_option = 'charged', score_list = [], desired_score_list = []):
 
-        batch_mol_graph = create_torch_graph_from_one_atom_batch(sample_first_atom_batch(batch_size = batch_size, encoding = encoding_option), edge_size=edge_size, encoding_option=encoding_option)
+        self.desired_score_tensor = torch.tensor(desired_score_list, dtype=torch.float)
+        batch_mol_graph = create_torch_graph_from_one_atom_batch(sample_first_atom_batch(batch_size = batch_size, encoding = encoding_option), edge_size=edge_size, desired_score_tensor=self.desired_score_tensor, encoding_option=encoding_option)
         self.batch_mol_graph = batch_mol_graph.to(device) # Encoded in size 14 for the feature position
         self.queues = torch.zeros(batch_size, dtype=torch.long, device=device)
         self.node_counts = torch.zeros(batch_size, dtype=torch.long, device=device)
@@ -765,7 +766,7 @@ class MolGenBatchFasterDouble():
             self.intermidiate_states = []
 
         self.score_list = score_list
-        self.desired_score_tensor = torch.tensor(desired_score_list, dtype=torch.float).view(1, 1)
+        self.desired_score_tensor = self.desired_score_tensor.to(device)
 
     def one_step(self):
         with torch.no_grad():
@@ -793,11 +794,6 @@ class MolGenBatchFasterDouble():
             # Do you -1 for the current nodes that are finished
 
             self.batch_mol_graph.x[current_nodes_batched, self.encoding_size - 1] = 1
-
-            # Add score features if needed
-
-
-
             predictions = self.GNN1(self.batch_mol_graph)
             
             # Apply softmax to prediction
@@ -864,10 +860,21 @@ class MolGenBatchFasterDouble():
 
             closing_mask = (random_number < sigmoid_prediction3).flatten()
 
+            unique_graph_ids = torch.unique(self.batch_mol_graph.batch)
+            mask_location = self.batch_mol_graph.batch[None, :] == unique_graph_ids[:, None]
+
+            mask_location =  mask_location * mask[None, :]
+            # Create a mask if all the lines of mask_location are false then put false in the closing mask
+            mask_location = torch.sum(mask_location, dim=1)
+            closing_mask = torch.where(mask_location == 0, torch.zeros_like(closing_mask), closing_mask)
+
+
             chosing_prediction = self.GNN3_2(self.batch_mol_graph)
             
             choice_input = chosing_prediction[:, 1]
             sigmoid_input = chosing_prediction[:, 0]
+
+            sigmoid_input = torch.sigmoid(sigmoid_input)
 
             choosen_indexes, decision = select_option_batch(choice_input, sigmoid_input, self.batch_mol_graph.batch, mask)
 

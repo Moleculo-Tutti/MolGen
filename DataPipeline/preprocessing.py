@@ -206,7 +206,7 @@ def get_subgraph_with_terminal_nodes_step(data, num_steps, impose_edges=False):
         if num_steps < 1 or num_steps >= data.num_nodes*2:
             raise ValueError("num_atoms must be between 1 and 2 times the number of nodes in the graph.")
     if impose_edges == True:
-        if num_steps < 1 or num_steps > data.num_nodes:
+        if num_steps < 1 or num_steps >= data.num_nodes:
             raise ValueError("num_atoms must be between 1 and the number of nodes in the graph.")
 
     # Randomly select an atom
@@ -409,3 +409,72 @@ def process_encode_graph(smiles, encoding_option='all', kekulize=False, optional
 
     return encoded_data
 
+def tensor_to_smiles(node_features, edge_index, edge_attr, edge_mapping = 'aromatic', encoding_type = 'charged'):
+    # Create an empty editable molecule
+    mol = Chem.RWMol()
+
+    # Define atom mapping
+    if encoding_type == 'charged':
+        
+        atom_mapping = {
+            0: ('C', 0),
+            1: ('N', 0),
+            2: ('N', 1),
+            3: ('N', -1),
+            4: ('O', 0),
+            5: ('O', -1),
+            6: ('F', 0),
+            7: ('S', 0),
+            8: ('S', -1),
+            9: ('Cl', 0),
+            10: ('Br', 0),
+            11: ('I', 0)
+        }
+
+    elif encoding_type == 'polymer':
+        atom_mapping = {
+            0: ('C', 0),
+            1: ('N', 0),
+            2: ('O', 0),
+            3: ('F', 0),
+            4: ('Si', 0),
+            5: ('P', 0),
+            6: ('S', 0)}
+
+    # Add atoms
+    for atom_feature in node_features:
+        atom_idx = atom_feature[:12].argmax().item()
+        atom_symbol, charge = atom_mapping.get(atom_idx)
+        atom = Chem.Atom(atom_symbol)
+        atom.SetFormalCharge(charge)
+        mol.AddAtom(atom)
+
+    # Define bond type mapping
+    if edge_mapping == 'aromatic':
+        bond_mapping = {
+            0: Chem.rdchem.BondType.AROMATIC,
+            1: Chem.rdchem.BondType.SINGLE,
+            2: Chem.rdchem.BondType.DOUBLE,
+            3: Chem.rdchem.BondType.TRIPLE,
+        }
+    elif edge_mapping == 'kekulized':
+        bond_mapping = {
+            0: Chem.rdchem.BondType.SINGLE,
+            1: Chem.rdchem.BondType.DOUBLE,
+            2: Chem.rdchem.BondType.TRIPLE,
+        }
+
+    # Add bonds
+    for start, end, bond_attr in zip(edge_index[0], edge_index[1], edge_attr):
+        bond_type_idx = bond_attr[:4].argmax().item()
+        bond_type = bond_mapping.get(bond_type_idx)
+
+        # RDKit ignores attempts to add a bond that already exists,
+        # so we need to check if the bond exists before we add it
+        if mol.GetBondBetweenAtoms(start.item(), end.item()) is None:
+            mol.AddBond(start.item(), end.item(), bond_type)
+
+    # Convert the molecule to SMILES
+    smiles = Chem.MolToSmiles(mol)
+
+    return smiles
