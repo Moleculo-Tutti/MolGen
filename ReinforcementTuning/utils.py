@@ -13,38 +13,6 @@ from torch_geometric.data import Data, Batch
 
 
 
-
-
-def sample_path_from_model(model_q, model_a, model_pi,features,lambdas, batch_size = 128, device = 'cuda',  edge_size= 3 ):
-    #this function compute a batch of x ( so paths) and the corresponding q(x), a(x), pi(x)
-    #it also compute the features of the final molecule so that we can compute the exponents
-
-    #we first sample a batch of x
-    
-    true_graphs = [create_torch_graph_from_one_atom(sample_first_atom(), edge_size=edge_size, encoding_option='charged')
-                            for i in range(batch_size)]
-    
-    a_value = torch.zeros(batch_size)
-    q_value = torch.zeros(batch_size)
-    pi_value = torch.zeros(batch_size)
-    # the ground truth is given by the multinomial choices over the prediction of q 
-    
-
-    #TODO
-
-    #now we can compute the features of the final molecule
-    all_features_values = torch.zeros(batch_size, len(features)).to(device)
-    for i,fn in enumerate(features.values()):
-        all_features_values[:,i] = fn(true_graphs)
-
-    #exponents are the exponential of lambdas * all_features_values for each molecule
-    exponents = torch.exp(torch.matmul(all_features_values, lambdas), dim = 1) #check the dimension carefuly
-
-    return all_features_values ,exponents, a_value, q_value, pi_value 
-    # exponents, a_value, q_value, pi_value are of size batch_size 
-    # all_features_values is of size (batch_size, len(features))
-
-
  
 class GDCTrainer_path():
     #implement a finetuning of our odel (which is concatenation of 3 GNN) with a Gradient distributional policy program
