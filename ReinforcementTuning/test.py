@@ -84,7 +84,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_steps', type=int, default=1000)
-    parser.add_argument('--num_batches', type=int, default=4)
+    parser.add_argument('--num_batches', type=int, default=1)
     parser.add_argument('--num_minibatches', type=int, default=20)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--mini_batch_size', type=int, default=128)
