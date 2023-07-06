@@ -164,7 +164,7 @@ class GDCTrainer_path():
         P_over_pi = []
         pi_over_q = []
         total_loss = 0
-        for i in tqdm(range(num_batches)):
+        for i in tqdm(range(num_mini_batches)):
             loss = 0
             self.optimizer_1.zero_grad()
             self.optimizer_2.zero_grad()
