@@ -165,76 +165,75 @@ class GDCTrainer_path():
         pi_over_q = []
         total_loss = 0
         for i in tqdm(range(num_batches)):
-            for k in tqdm(range(num_mini_batches)):
-                loss = 0
-                self.optimizer_1.zero_grad()
-                self.optimizer_2.zero_grad()
-                self.optimizer_3_1.zero_grad()
-                self.optimizer_3_2.zero_grad()
+            loss = 0
+            self.optimizer_1.zero_grad()
+            self.optimizer_2.zero_grad()
+            self.optimizer_3_1.zero_grad()
+            self.optimizer_3_2.zero_grad()
 
-                self.Module_Gen.full_generation(batch_size = self.minibatch_size)
-                self.Module_Gen.convert_to_smiles()
-                self.Module_Gen.compute_features()
-                
-                exponents, all_features_values, q_value, a_value, pi_value = self.Module_Gen.get_all()
-
-                # Check if there is a zero in the tensor q, a or pi
-
-                if (q_value == 0).any():
-                    print(q_value)
-
-                if (a_value == 0).any():
-                    print(a_value)
-                
-                if (pi_value == 0).any():
-                    print(pi_value)
-
-                assert self.Module_Gen.GNNs_Models_q.GNN1_model.training == False
-                assert self.Module_Gen.GNNs_Models_q.GNN2_model.training == False
-                assert self.Module_Gen.GNNs_Models_q.GNN3_1_model.training == False
-                assert self.Module_Gen.GNNs_Models_q.GNN3_2_model.training == False
-                assert self.Module_Gen.GNNs_Models_pi.GNN1_model.training == False
-                assert self.Module_Gen.GNNs_Models_pi.GNN2_model.training == False
-                assert self.Module_Gen.GNNs_Models_pi.GNN3_1_model.training == False
-                assert self.Module_Gen.GNNs_Models_pi.GNN3_2_model.training == False
-                assert self.Module_Gen.GNNs_Models_a.GNN1_model.training == False
-                assert self.Module_Gen.GNNs_Models_a.GNN2_model.training == False
-                assert self.Module_Gen.GNNs_Models_a.GNN3_1_model.training == False
-                assert self.Module_Gen.GNNs_Models_a.GNN3_2_model.training == False
-                
-
-                P_over_q.append(torch.flatten(a_value * exponents / q_value))
-                P_over_pi.append(torch.flatten(a_value * exponents / pi_value))
-                pi_over_q.append(torch.flatten(pi_value / q_value))
-
-                # Compute the loss to train the model
-                loss = - torch.sum(a_value*exponents / q_value * torch.log(pi_value))
-                total_loss += loss.item()   
-
-                # Backward pass and optimizer steps are performed after each mini-batch
-                loss.backward()
-                self.optimizer_1.step()
-                self.optimizer_2.step()
-                self.optimizer_3_1.step()
-                self.optimizer_3_2.step()
-
-                self.Module_Gen.clean_memory()
-
-                """
-                # Delete everything that is not needed anymore
-                loss.cpu().detach()
-                q_value.cpu().detach()
-                a_value.cpu().detach()
-                pi_value.cpu().detach()
-                exponents.cpu().detach()
-                del loss, q_value, a_value, pi_value, exponents
-
-                torch.cuda.empty_cache()
-
-                # Garbage collection
-                gc.collect()
-                """
+            self.Module_Gen.full_generation(batch_size = self.minibatch_size)
+            self.Module_Gen.convert_to_smiles()
+            self.Module_Gen.compute_features()
             
+            exponents, all_features_values, q_value, a_value, pi_value = self.Module_Gen.get_all()
+
+            # Check if there is a zero in the tensor q, a or pi
+
+            if (q_value == 0).any():
+                print(q_value)
+
+            if (a_value == 0).any():
+                print(a_value)
+            
+            if (pi_value == 0).any():
+                print(pi_value)
+
+            assert self.Module_Gen.GNNs_Models_q.GNN1_model.training == False
+            assert self.Module_Gen.GNNs_Models_q.GNN2_model.training == False
+            assert self.Module_Gen.GNNs_Models_q.GNN3_1_model.training == False
+            assert self.Module_Gen.GNNs_Models_q.GNN3_2_model.training == False
+            assert self.Module_Gen.GNNs_Models_pi.GNN1_model.training == False
+            assert self.Module_Gen.GNNs_Models_pi.GNN2_model.training == False
+            assert self.Module_Gen.GNNs_Models_pi.GNN3_1_model.training == False
+            assert self.Module_Gen.GNNs_Models_pi.GNN3_2_model.training == False
+            assert self.Module_Gen.GNNs_Models_a.GNN1_model.training == False
+            assert self.Module_Gen.GNNs_Models_a.GNN2_model.training == False
+            assert self.Module_Gen.GNNs_Models_a.GNN3_1_model.training == False
+            assert self.Module_Gen.GNNs_Models_a.GNN3_2_model.training == False
+            
+
+            P_over_q.append(torch.flatten(a_value * exponents / q_value))
+            P_over_pi.append(torch.flatten(a_value * exponents / pi_value))
+            pi_over_q.append(torch.flatten(pi_value / q_value))
+
+            # Compute the loss to train the model
+            loss = - torch.sum(a_value*exponents / q_value * torch.log(pi_value))
+            total_loss += loss.item()   
+
+            # Backward pass and optimizer steps are performed after each mini-batch
+            loss.backward()
+            self.optimizer_1.step()
+            self.optimizer_2.step()
+            self.optimizer_3_1.step()
+            self.optimizer_3_2.step()
+
+            self.Module_Gen.clean_memory()
+
+            """
+            # Delete everything that is not needed anymore
+            loss.cpu().detach()
+            q_value.cpu().detach()
+            a_value.cpu().detach()
+            pi_value.cpu().detach()
+            exponents.cpu().detach()
+            del loss, q_value, a_value, pi_value, exponents
+
+            torch.cuda.empty_cache()
+
+            # Garbage collection
+            gc.collect()
+            """
+        
             
         mean_loss = total_loss / (num_batches * num_mini_batches * self.minibatch_size)
 

@@ -538,7 +538,13 @@ class Sampling_Path_Batch():
         graph_list = extract_all_graphs(self.mol_graphs_list)
         smiles_list = []
         for g in graph_list:
-            smiles_list.append(tensor_to_smiles(g.x, g.edge_index, g.edge_attr, edge_mapping='kekulized', encoding_type='charged'))
+            try:
+                smiles_list.append(tensor_to_smiles(g.x, g.edge_index, g.edge_attr, edge_mapping='kekulized', encoding_type='charged'))
+            except:
+                print('Error in converting to smiles')
+                print(g.x)
+                print(g.edge_index)
+                print(g.edge_attr)
         
         self.smiles_list = smiles_list
 

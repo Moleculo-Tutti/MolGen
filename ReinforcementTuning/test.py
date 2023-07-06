@@ -78,7 +78,7 @@ def main(args):
                             batch_size = 1000,
                             min_nabla_lambda = 1e-4,
                             lambdas=torch.Tensor([7.8309, 8.3757])) 
-    Trainer.run_steps(args.num_steps, args.num_batches, args.num_minibatches)
+    Trainer.run_steps(args.num_steps, args.num_minibatches)
 
 
 if __name__ == '__main__':
