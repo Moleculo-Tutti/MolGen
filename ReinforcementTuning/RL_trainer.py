@@ -272,6 +272,8 @@ class GDCTrainer_path():
         print('dkl_p_pi: ', dkl_p_pi)
         print('dkl_p_q: ', dkl_p_q)
         
+        print('tvd_p_pi: ', tvd_p_pi)
+        print('tvd_p_q: ', tvd_p_q)
 
         if self.q_update_criterion in ['kld', 'tvd']:
             if self.q_update_criterion == 'kld':
