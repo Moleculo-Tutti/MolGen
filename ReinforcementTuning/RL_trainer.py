@@ -233,8 +233,9 @@ class GDCTrainer_path():
         P_over_q = torch.flatten(torch.stack(P_over_q))
         P_over_pi = torch.flatten(torch.stack(P_over_pi))
         pi_over_q = torch.flatten(torch.stack(pi_over_q))
-
-        all_features_values_total = torch.stack(all_features_values_total)
+        
+        # Concatenate all the features values along the first dimension
+        all_features_values_total = torch.cat(all_features_values_total, dim=0)
 
         ### now we compare the KL divergence betweend p and pi and p and q to perhaps replacce q 
         was_q_updated = False

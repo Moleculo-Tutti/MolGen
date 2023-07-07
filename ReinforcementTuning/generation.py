@@ -291,220 +291,222 @@ class Sampling_Path_Batch():
 
     def one_step(self):
 
-        current_nodes = self.queues.clone()
-        
-        # Get the molecules that are finished which means that the number in the queue is superior to the number of nodes in the molecule
-        old_finished_mask = self.finished_mask
-        self.finished_mask = current_nodes > self.node_counts
+        with torch.set_grad_enabled(not self.compute_lambdas):
 
-        # test if no molecule has changed from finished to unfinished
-        if torch.any(old_finished_mask & ~self.finished_mask):
-            print('error')
-            raise ValueError('error')
-        # If all the mask is True, then all the molecules are finished
-        if torch.all(self.finished_mask):
-            return 
-        """
-        Prepare the GNN 1 BATCH
-        """
-        current_nodes[self.finished_mask] = current_nodes[self.finished_mask] - 1
-        current_nodes_batched = return_current_nodes_batched(current_nodes, self.batch_mol_graph) #reindex the nodes to match the batch size
-        
-        self.batch_mol_graph.x[: , self.encoding_size - 1] = 0
-        # Do you -1 for the current nodes that are finished
-
-        self.batch_mol_graph.x[current_nodes_batched, self.encoding_size - 1] = 1
-
-        # Add score features if needed
-
-
-
-        q_predictions = self.GNNs_Models_q.GNN1_model(self.batch_mol_graph)
-        a_predictions = self.GNNs_Models_a.GNN1_model(self.batch_mol_graph)
-        pi_predictions = self.GNNs_Models_pi.GNN1_model(self.batch_mol_graph)
-
-        
-        # Apply softmax to prediction
-        q_softmax_predictions = F.softmax(q_predictions, dim=1)
-        a_softmax_predictions = F.softmax(a_predictions, dim=1)
-        pi_softmax_predictions = F.softmax(pi_predictions, dim=1)
-
-        # Sample next node from prediction
-        predicted_nodes = torch.multinomial(q_softmax_predictions, num_samples=1)
-
-        # Get the q, a and pi values for the predicted_node 
-        q_value = q_softmax_predictions[torch.arange(self.batch_size), predicted_nodes.flatten()]
-        a_value = a_softmax_predictions[torch.arange(self.batch_size), predicted_nodes.flatten()]
-        pi_value = pi_softmax_predictions[torch.arange(self.batch_size), predicted_nodes.flatten()]
-
-        # Actualize the q, a, pi and use the finished mask to only actualize the values of the molecules that are not finished
-        self.q_value = self.q_value * torch.max(self.finished_mask.float(), q_value)
-        self.a_value = self.a_value * torch.max(self.finished_mask.float(), a_value)
-        self.pi_value = self.pi_value * torch.max(self.finished_mask.float(), pi_value)
-
-        # Create a mask for determining which graphs should continue to GNN2
-        mask_gnn2 = (predicted_nodes != self.encoding_size - 1).flatten()
-
-        # Handle the stopping condition (where predicted_node is encoding_size - 1)
-        stop_mask = (predicted_nodes == self.encoding_size - 1).flatten()
+            current_nodes = self.queues.clone()
             
-        # Increment the node count for graphs that haven't stopped and that are not finished
-        self.node_counts = self.node_counts + torch.logical_and(~stop_mask, ~self.finished_mask).long()
+            # Get the molecules that are finished which means that the number in the queue is superior to the number of nodes in the molecule
+            old_finished_mask = self.finished_mask
+            self.finished_mask = current_nodes > self.node_counts
 
-        # Increment the queue for graphs that have been stopped and that are not finished
-        
-        self.queues = self.queues + torch.logical_and(stop_mask, ~self.finished_mask).long()
+            # test if no molecule has changed from finished to unfinished
+            if torch.any(old_finished_mask & ~self.finished_mask):
+                print('error')
+                raise ValueError('error')
+            # If all the mask is True, then all the molecules are finished
+            if torch.all(self.finished_mask):
+                return 
+            """
+            Prepare the GNN 1 BATCH
+            """
+            current_nodes[self.finished_mask] = current_nodes[self.finished_mask] - 1
+            current_nodes_batched = return_current_nodes_batched(current_nodes, self.batch_mol_graph) #reindex the nodes to match the batch size
+            
+            self.batch_mol_graph.x[: , self.encoding_size - 1] = 0
+            # Do you -1 for the current nodes that are finished
 
-        # Increment the feature position for graphs that have been stopped
+            self.batch_mol_graph.x[current_nodes_batched, self.encoding_size - 1] = 1
 
-        self.batch_mol_graph = increment_feature_position(self.batch_mol_graph, current_nodes_batched, stop_mask, self.encoding_size)
+            # Add score features if needed
 
-        # Encode next node for the entire batch
-        encoded_predicted_nodes = torch.zeros(q_predictions.size(), device=self.device, dtype=torch.float)
-        encoded_predicted_nodes.scatter_(1, predicted_nodes, 1)
 
-        #GNN2 
+
+            q_predictions = self.GNNs_Models_q.GNN1_model(self.batch_mol_graph)
+            a_predictions = self.GNNs_Models_a.GNN1_model(self.batch_mol_graph)
+            pi_predictions = self.GNNs_Models_pi.GNN1_model(self.batch_mol_graph)
+
+            
+            # Apply softmax to prediction
+            q_softmax_predictions = F.softmax(q_predictions, dim=1)
+            a_softmax_predictions = F.softmax(a_predictions, dim=1)
+            pi_softmax_predictions = F.softmax(pi_predictions, dim=1)
+
+            # Sample next node from prediction
+            predicted_nodes = torch.multinomial(q_softmax_predictions, num_samples=1)
+
+            # Get the q, a and pi values for the predicted_node 
+            q_value = q_softmax_predictions[torch.arange(self.batch_size), predicted_nodes.flatten()]
+            a_value = a_softmax_predictions[torch.arange(self.batch_size), predicted_nodes.flatten()]
+            pi_value = pi_softmax_predictions[torch.arange(self.batch_size), predicted_nodes.flatten()]
+
+            # Actualize the q, a, pi and use the finished mask to only actualize the values of the molecules that are not finished
+            self.q_value = self.q_value * torch.max(self.finished_mask.float(), q_value)
+            self.a_value = self.a_value * torch.max(self.finished_mask.float(), a_value)
+            self.pi_value = self.pi_value * torch.max(self.finished_mask.float(), pi_value)
+
+            # Create a mask for determining which graphs should continue to GNN2
+            mask_gnn2 = (predicted_nodes != self.encoding_size - 1).flatten()
+
+            # Handle the stopping condition (where predicted_node is encoding_size - 1)
+            stop_mask = (predicted_nodes == self.encoding_size - 1).flatten()
                 
-        # add zeros to the neighbor because of the feature position
-        encoded_predicted_nodes = torch.cat([encoded_predicted_nodes, torch.zeros(self.batch_size, 1).to(encoded_predicted_nodes.device)], dim=1)
+            # Increment the node count for graphs that haven't stopped and that are not finished
+            self.node_counts = self.node_counts + torch.logical_and(~stop_mask, ~self.finished_mask).long()
 
-        self.batch_mol_graph.neighbor = encoded_predicted_nodes
+            # Increment the queue for graphs that have been stopped and that are not finished
+            
+            self.queues = self.queues + torch.logical_and(stop_mask, ~self.finished_mask).long()
+
+            # Increment the feature position for graphs that have been stopped
+
+            self.batch_mol_graph = increment_feature_position(self.batch_mol_graph, current_nodes_batched, stop_mask, self.encoding_size)
+
+            # Encode next node for the entire batch
+            encoded_predicted_nodes = torch.zeros(q_predictions.size(), device=self.device, dtype=torch.float)
+            encoded_predicted_nodes.scatter_(1, predicted_nodes, 1)
+
+            #GNN2 
+                    
+            # add zeros to the neighbor because of the feature position
+            encoded_predicted_nodes = torch.cat([encoded_predicted_nodes, torch.zeros(self.batch_size, 1).to(encoded_predicted_nodes.device)], dim=1)
+
+            self.batch_mol_graph.neighbor = encoded_predicted_nodes
+
+            
+            q_predictions_2 = self.GNNs_Models_q.GNN2_model(self.batch_mol_graph)
+            a_predictions_2 = self.GNNs_Models_a.GNN2_model(self.batch_mol_graph)
+            pi_predictions_2 = self.GNNs_Models_pi.GNN2_model(self.batch_mol_graph)
+
+            # Apply softmax to prediction
+            q_softmax_predictions_2 = F.softmax(q_predictions_2, dim=1)
+            a_softmax_predictions_2 = F.softmax(a_predictions_2, dim=1)
+            pi_softmax_predictions_2 = F.softmax(pi_predictions_2, dim=1)
+
+            predicted_edges = torch.multinomial(q_softmax_predictions_2, num_samples=1)
+
+            # Get the q, a and pi values for the predicted_node
+            q_value = q_softmax_predictions_2[torch.arange(self.batch_size), predicted_edges.flatten()]
+            a_value = a_softmax_predictions_2[torch.arange(self.batch_size), predicted_edges.flatten()]
+            pi_value = pi_softmax_predictions_2[torch.arange(self.batch_size), predicted_edges.flatten()]
+
+
+
+            # Actualize the q, a, pi and use the mask to only actualize the graphs that have not stopped by getting the max of the stop mask, the finis
+            self.q_value = self.q_value * torch.max(torch.logical_or(stop_mask, self.finished_mask).float(), q_value)
+            self.a_value = self.a_value * torch.max(torch.logical_or(stop_mask, self.finished_mask).float(), a_value)
+            self.pi_value = self.pi_value * torch.max(torch.logical_or(stop_mask, self.finished_mask).float(), pi_value)
 
         
-        q_predictions_2 = self.GNNs_Models_q.GNN2_model(self.batch_mol_graph)
-        a_predictions_2 = self.GNNs_Models_a.GNN2_model(self.batch_mol_graph)
-        pi_predictions_2 = self.GNNs_Models_pi.GNN2_model(self.batch_mol_graph)
+            encoded_predicted_edges = torch.zeros_like(q_predictions_2, device=self.device, dtype=torch.float)
+            encoded_predicted_edges.scatter_(1, predicted_edges, 1)
+            
+            # Create a new node that is going to be added to the graph for each batch
+            new_nodes = torch.zeros(self.batch_size, self.encoding_size, device=self.device, dtype=torch.float)
+            new_nodes.scatter_(1, predicted_nodes, 1)
 
-        # Apply softmax to prediction
-        q_softmax_predictions_2 = F.softmax(q_predictions_2, dim=1)
-        a_softmax_predictions_2 = F.softmax(a_predictions_2, dim=1)
-        pi_softmax_predictions_2 = F.softmax(pi_predictions_2, dim=1)
+            #GNN3
 
-        predicted_edges = torch.multinomial(q_softmax_predictions_2, num_samples=1)
+            # Add the node and the edge to the graph
+            self.batch_mol_graph = add_nodes_and_edges_batch(self.batch_mol_graph, new_nodes, encoded_predicted_edges, current_nodes_batched, torch.logical_and(mask_gnn2, ~self.finished_mask))
+            
 
-        # Get the q, a and pi values for the predicted_node
-        q_value = q_softmax_predictions_2[torch.arange(self.batch_size), predicted_edges.flatten()]
-        a_value = a_softmax_predictions_2[torch.arange(self.batch_size), predicted_edges.flatten()]
-        pi_value = pi_softmax_predictions_2[torch.arange(self.batch_size), predicted_edges.flatten()]
-
-
-
-        # Actualize the q, a, pi and use the mask to only actualize the graphs that have not stopped by getting the max of the stop mask, the finis
-        self.q_value = self.q_value * torch.max(torch.logical_or(stop_mask, self.finished_mask).float(), q_value)
-        self.a_value = self.a_value * torch.max(torch.logical_or(stop_mask, self.finished_mask).float(), a_value)
-        self.pi_value = self.pi_value * torch.max(torch.logical_or(stop_mask, self.finished_mask).float(), pi_value)
-
-    
-        encoded_predicted_edges = torch.zeros_like(q_predictions_2, device=self.device, dtype=torch.float)
-        encoded_predicted_edges.scatter_(1, predicted_edges, 1)
-        
-        # Create a new node that is going to be added to the graph for each batch
-        new_nodes = torch.zeros(self.batch_size, self.encoding_size, device=self.device, dtype=torch.float)
-        new_nodes.scatter_(1, predicted_nodes, 1)
-
-        #GNN3
-
-        # Add the node and the edge to the graph
-        self.batch_mol_graph = add_nodes_and_edges_batch(self.batch_mol_graph, new_nodes, encoded_predicted_edges, current_nodes_batched, torch.logical_and(mask_gnn2, ~self.finished_mask))
+            self.batch_mol_graph = set_last_nodes(self.batch_mol_graph, torch.sum(torch.logical_and(mask_gnn2, ~self.finished_mask), dim=0), self.encoding_size)       
+            mask = create_mask(self.batch_mol_graph, current_nodes_tensor = current_nodes_batched, last_prediction_size=torch.sum(torch.logical_and(mask_gnn2, ~self.finished_mask), dim=0), encoding_size=self.encoding_size)
+            self.batch_mol_graph.mask = mask
         
 
-        self.batch_mol_graph = set_last_nodes(self.batch_mol_graph, torch.sum(torch.logical_and(mask_gnn2, ~self.finished_mask), dim=0), self.encoding_size)       
-        mask = create_mask(self.batch_mol_graph, current_nodes_tensor = current_nodes_batched, last_prediction_size=torch.sum(torch.logical_and(mask_gnn2, ~self.finished_mask), dim=0), encoding_size=self.encoding_size)
-        self.batch_mol_graph.mask = mask
-    
+            q_prediction_closing = self.GNNs_Models_q.GNN3_1_model(self.batch_mol_graph)
+            a_prediction_closing = self.GNNs_Models_a.GNN3_1_model(self.batch_mol_graph)
+            pi_prediction_closing = self.GNNs_Models_pi.GNN3_1_model(self.batch_mol_graph)
+            
+            q_sigmoid_prediction_3 = torch.sigmoid(q_prediction_closing).flatten()
+            a_sigmoid_prediction_3 = torch.sigmoid(a_prediction_closing).flatten()
+            pi_sigmoid_prediction_3 = torch.sigmoid(pi_prediction_closing).flatten()
 
-        q_prediction_closing = self.GNNs_Models_q.GNN3_1_model(self.batch_mol_graph)
-        a_prediction_closing = self.GNNs_Models_a.GNN3_1_model(self.batch_mol_graph)
-        pi_prediction_closing = self.GNNs_Models_pi.GNN3_1_model(self.batch_mol_graph)
-        
-        q_sigmoid_prediction_3 = torch.sigmoid(q_prediction_closing).flatten()
-        a_sigmoid_prediction_3 = torch.sigmoid(a_prediction_closing).flatten()
-        pi_sigmoid_prediction_3 = torch.sigmoid(pi_prediction_closing).flatten()
+            random_number = torch.rand(q_sigmoid_prediction_3.shape, device=self.device)
 
-        random_number = torch.rand(q_sigmoid_prediction_3.shape, device=self.device)
+            closing_mask = (random_number < q_sigmoid_prediction_3).flatten() 
 
-        closing_mask = (random_number < q_sigmoid_prediction_3).flatten() 
+            unique_graph_ids = torch.unique(self.batch_mol_graph.batch)
+            mask_location = self.batch_mol_graph.batch[None, :] == unique_graph_ids[:, None]
 
-        unique_graph_ids = torch.unique(self.batch_mol_graph.batch)
-        mask_location = self.batch_mol_graph.batch[None, :] == unique_graph_ids[:, None]
-
-        mask_location =  mask_location * mask[None, :]
-        # Create a mask if all the lines of mask_location are false then put false in the closing mask
-        mask_location = torch.sum(mask_location, dim=1)
+            mask_location =  mask_location * mask[None, :]
+            # Create a mask if all the lines of mask_location are false then put false in the closing mask
+            mask_location = torch.sum(mask_location, dim=1)
 
 
-        # Get the q, a and pi values for the predicted_node. If the closing mask is true, the value is sigmoid, otherwise it is 1-sigmoid
-        q_values = torch.where(closing_mask, q_sigmoid_prediction_3, 1 - q_sigmoid_prediction_3)
-        a_values = torch.where(closing_mask, a_sigmoid_prediction_3, 1 - a_sigmoid_prediction_3)
-        pi_values = torch.where(closing_mask, pi_sigmoid_prediction_3, 1 - pi_sigmoid_prediction_3)
+            # Get the q, a and pi values for the predicted_node. If the closing mask is true, the value is sigmoid, otherwise it is 1-sigmoid
+            q_values = torch.where(closing_mask, q_sigmoid_prediction_3, 1 - q_sigmoid_prediction_3)
+            a_values = torch.where(closing_mask, a_sigmoid_prediction_3, 1 - a_sigmoid_prediction_3)
+            pi_values = torch.where(closing_mask, pi_sigmoid_prediction_3, 1 - pi_sigmoid_prediction_3)
 
 
-        # Actualize the q, a, pi and use the mask to only actualize the graphs that have not stopped by getting the max of the stop mask, the finis
-        self.q_value = self.q_value * torch.max(torch.logical_or(stop_mask, self.finished_mask).float(), q_values)
-        self.a_value = self.a_value * torch.max(torch.logical_or(stop_mask, self.finished_mask).float(), a_values)
-        self.pi_value = self.pi_value * torch.max(torch.logical_or(stop_mask, self.finished_mask).float(), pi_values)
-        
+            # Actualize the q, a, pi and use the mask to only actualize the graphs that have not stopped by getting the max of the stop mask, the finis
+            self.q_value = self.q_value * torch.max(torch.logical_or(stop_mask, self.finished_mask).float(), q_values)
+            self.a_value = self.a_value * torch.max(torch.logical_or(stop_mask, self.finished_mask).float(), a_values)
+            self.pi_value = self.pi_value * torch.max(torch.logical_or(stop_mask, self.finished_mask).float(), pi_values)
+            
 
-        q_chosing_prediction = self.GNNs_Models_q.GNN3_2_model(self.batch_mol_graph)
-        a_chosing_prediction = self.GNNs_Models_a.GNN3_2_model(self.batch_mol_graph)
-        pi_chosing_prediction = self.GNNs_Models_pi.GNN3_2_model(self.batch_mol_graph)
-        
-        
-        q_choice_input = q_chosing_prediction[:, 1]
-        q_sigmoid_input = q_chosing_prediction[:, 0]
-        a_choice_input = a_chosing_prediction[:, 1]
-        a_sigmoid_input = a_chosing_prediction[:, 0]
-        pi_choice_input = pi_chosing_prediction[:, 1]
-        pi_sigmoid_input = pi_chosing_prediction[:, 0]
+            q_chosing_prediction = self.GNNs_Models_q.GNN3_2_model(self.batch_mol_graph)
+            a_chosing_prediction = self.GNNs_Models_a.GNN3_2_model(self.batch_mol_graph)
+            pi_chosing_prediction = self.GNNs_Models_pi.GNN3_2_model(self.batch_mol_graph)
+            
+            
+            q_choice_input = q_chosing_prediction[:, 1]
+            q_sigmoid_input = q_chosing_prediction[:, 0]
+            a_choice_input = a_chosing_prediction[:, 1]
+            a_sigmoid_input = a_chosing_prediction[:, 0]
+            pi_choice_input = pi_chosing_prediction[:, 1]
+            pi_sigmoid_input = pi_chosing_prediction[:, 0]
 
-        # Apply sigmoid 
+            # Apply sigmoid 
 
-        q_sigmoid_input = torch.sigmoid(q_sigmoid_input)
-        a_sigmoid_input = torch.sigmoid(a_sigmoid_input)
-        pi_sigmoid_input = torch.sigmoid(pi_sigmoid_input)
+            q_sigmoid_input = torch.sigmoid(q_sigmoid_input)
+            a_sigmoid_input = torch.sigmoid(a_sigmoid_input)
+            pi_sigmoid_input = torch.sigmoid(pi_sigmoid_input)
 
-        # Compute softmax 
+            # Compute softmax 
 
-        q_softmax_input = compute_softmax_GNN3(q_choice_input, self.batch_mol_graph.batch, mask)
-        a_softmax_input = compute_softmax_GNN3(a_choice_input, self.batch_mol_graph.batch, mask)
-        pi_softmax_input = compute_softmax_GNN3(pi_choice_input, self.batch_mol_graph.batch, mask)
-
-
-        choosen_indexes, decision = select_option_batch(q_softmax_input, q_sigmoid_input)
-
-        choosen_indexes = choosen_indexes.squeeze()
-        
-        # Get the q, a and pi values for the predicted_node. Based on the choosen index.
-
-        # Extract the choosen input from sigmoid
-
-        q_extracted_sigmoid = q_sigmoid_input[choosen_indexes].squeeze()
-        a_extracted_sigmoid = a_sigmoid_input[choosen_indexes].squeeze()
-        pi_extracted_sigmoid = pi_sigmoid_input[choosen_indexes].squeeze()
-
-        decision = decision.squeeze()
-
-        graph_indices = torch.arange(q_softmax_input.shape[0], device=self.device)
-        
-        q_values = (q_softmax_input[graph_indices, choosen_indexes].squeeze()) * torch.where(decision == 1, q_extracted_sigmoid, 1 - q_extracted_sigmoid)
-        a_values = (a_softmax_input[graph_indices, choosen_indexes].squeeze()) * torch.where(decision == 1, a_extracted_sigmoid, 1 - a_extracted_sigmoid)
-        pi_values = (pi_softmax_input[graph_indices, choosen_indexes].squeeze()) * torch.where(decision == 1, pi_extracted_sigmoid, 1 - pi_extracted_sigmoid)
-        
-        # Actualize the q, a, pi and use the mask to only actualize the graphs that have not stopped by getting the max of the stop mask, the finis
-        total_mask = torch.logical_or(torch.logical_or(~closing_mask, stop_mask), self.finished_mask)
-
-        self.q_value = self.q_value * torch.max(total_mask.float(), q_values)
-        self.a_value = self.a_value * torch.max(total_mask.float(), a_values)
-        self.pi_value = self.pi_value * torch.max(total_mask.float(), pi_values)
+            q_softmax_input = compute_softmax_GNN3(q_choice_input, self.batch_mol_graph.batch, mask)
+            a_softmax_input = compute_softmax_GNN3(a_choice_input, self.batch_mol_graph.batch, mask)
+            pi_softmax_input = compute_softmax_GNN3(pi_choice_input, self.batch_mol_graph.batch, mask)
 
 
-        encoded_edges_predicted = torch.zeros((decision.shape[0], self.edge_size), device=self.device, dtype=torch.float)
+            choosen_indexes, decision = select_option_batch(q_softmax_input, q_sigmoid_input)
 
-        encoded_edges_predicted.scatter_(1, decision.unsqueeze(1), 1)
+            choosen_indexes = choosen_indexes.squeeze()
+            
+            # Get the q, a and pi values for the predicted_node. Based on the choosen index.
 
-        total_mask = torch.logical_and(torch.logical_and(closing_mask, mask_gnn2), ~self.finished_mask)
+            # Extract the choosen input from sigmoid
 
-        self.mol_graphs_list = add_edges_and_attributes(self.batch_mol_graph, encoded_edges_predicted, choosen_indexes.flatten(), total_mask, torch.logical_and(mask_gnn2, ~self.finished_mask))
+            q_extracted_sigmoid = q_sigmoid_input[choosen_indexes].squeeze()
+            a_extracted_sigmoid = a_sigmoid_input[choosen_indexes].squeeze()
+            pi_extracted_sigmoid = pi_sigmoid_input[choosen_indexes].squeeze()
+
+            decision = decision.squeeze()
+
+            graph_indices = torch.arange(q_softmax_input.shape[0], device=self.device)
+            
+            q_values = (q_softmax_input[graph_indices, choosen_indexes].squeeze()) * torch.where(decision == 1, q_extracted_sigmoid, 1 - q_extracted_sigmoid)
+            a_values = (a_softmax_input[graph_indices, choosen_indexes].squeeze()) * torch.where(decision == 1, a_extracted_sigmoid, 1 - a_extracted_sigmoid)
+            pi_values = (pi_softmax_input[graph_indices, choosen_indexes].squeeze()) * torch.where(decision == 1, pi_extracted_sigmoid, 1 - pi_extracted_sigmoid)
+            
+            # Actualize the q, a, pi and use the mask to only actualize the graphs that have not stopped by getting the max of the stop mask, the finis
+            total_mask = torch.logical_or(torch.logical_or(~closing_mask, stop_mask), self.finished_mask)
+
+            self.q_value = self.q_value * torch.max(total_mask.float(), q_values)
+            self.a_value = self.a_value * torch.max(total_mask.float(), a_values)
+            self.pi_value = self.pi_value * torch.max(total_mask.float(), pi_values)
+
+
+            encoded_edges_predicted = torch.zeros((decision.shape[0], self.edge_size), device=self.device, dtype=torch.float)
+
+            encoded_edges_predicted.scatter_(1, decision.unsqueeze(1), 1)
+
+            total_mask = torch.logical_and(torch.logical_and(closing_mask, mask_gnn2), ~self.finished_mask)
+
+            self.mol_graphs_list = add_edges_and_attributes(self.batch_mol_graph, encoded_edges_predicted, choosen_indexes.flatten(), total_mask, torch.logical_and(mask_gnn2, ~self.finished_mask))
 
 
     def full_generation(self, batch_size):
