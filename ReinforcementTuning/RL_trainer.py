@@ -248,6 +248,13 @@ class GDCTrainer_path():
         ### now we compare the KL divergence betweend p and pi and p and q to perhaps replacce q 
         was_q_updated = False
         z_hat_i = torch.mean(P_over_q)
+        print('max P_over_q : ', torch.max(P_over_q))
+        print('min P_over_q : ', torch.min(P_over_q))
+
+        print('sum P_over_q : ', torch.sum(P_over_q))
+
+        print('mean P_over_q : ', torch.sum(P_over_q)/(num_mini_batches * self.minibatch_size))
+
         z_hat_i_std = torch.std(P_over_q)
         print('z_hat_i : ', z_hat_i)
         print('i' , self.iter)
