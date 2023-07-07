@@ -164,86 +164,77 @@ class GDCTrainer_path():
         P_over_pi = []
         pi_over_q = []
         total_loss = 0
-        for i in tqdm(range(num_mini_batches)):
-            loss = 0
-            self.optimizer_1.zero_grad()
-            self.optimizer_2.zero_grad()
-            self.optimizer_3_1.zero_grad()
-            self.optimizer_3_2.zero_grad()
+        all_features_values_total = []
+        for k in tqdm(range(num_batches)):
+            for i in tqdm(range(num_mini_batches)):
+                loss = 0
+                self.optimizer_1.zero_grad()
+                self.optimizer_2.zero_grad()
+                self.optimizer_3_1.zero_grad()
+                self.optimizer_3_2.zero_grad()
 
-            self.Module_Gen.full_generation(batch_size = self.minibatch_size)
-            self.Module_Gen.convert_to_smiles()
-            self.Module_Gen.compute_features()
-            
-            exponents, all_features_values, q_value, a_value, pi_value = self.Module_Gen.get_all()
+                self.Module_Gen.full_generation(batch_size = self.minibatch_size)
+                self.Module_Gen.convert_to_smiles()
+                self.Module_Gen.compute_features()
+                
+                exponents, all_features_values, q_value, a_value, pi_value = self.Module_Gen.get_all()
 
-            # Check if there is a zero in the tensor q, a or pi
+                # Check if there is a zero in the tensor q, a or pi
 
-            if (q_value == 0).any():
-                # Add a tensor of 1e-38 on all the values of q
-                q_value = q_value + torch.ones_like(q_value) * float('1e-38')
+                if (q_value == 0).any():
+                    # Add a tensor of 1e-38 on all the values of q
+                    q_value = q_value + torch.ones_like(q_value) * float('1e-38')
 
-            if (a_value == 0).any():
-                # Add a tensor of 1e-38 on all the values of a
-                a_value = a_value + torch.ones_like(a_value) * float('1e-38')
-            
-            if (pi_value == 0).any():
-                # Add a tensor of 1e-38 on all the values of pi
-                pi_value = pi_value + torch.ones_like(pi_value) * float('1e-38')
+                if (a_value == 0).any():
+                    # Add a tensor of 1e-38 on all the values of a
+                    a_value = a_value + torch.ones_like(a_value) * float('1e-38')
+                
+                if (pi_value == 0).any():
+                    # Add a tensor of 1e-38 on all the values of pi
+                    pi_value = pi_value + torch.ones_like(pi_value) * float('1e-38')
 
-            assert self.Module_Gen.GNNs_Models_q.GNN1_model.training == False
-            assert self.Module_Gen.GNNs_Models_q.GNN2_model.training == False
-            assert self.Module_Gen.GNNs_Models_q.GNN3_1_model.training == False
-            assert self.Module_Gen.GNNs_Models_q.GNN3_2_model.training == False
-            assert self.Module_Gen.GNNs_Models_pi.GNN1_model.training == False
-            assert self.Module_Gen.GNNs_Models_pi.GNN2_model.training == False
-            assert self.Module_Gen.GNNs_Models_pi.GNN3_1_model.training == False
-            assert self.Module_Gen.GNNs_Models_pi.GNN3_2_model.training == False
-            assert self.Module_Gen.GNNs_Models_a.GNN1_model.training == False
-            assert self.Module_Gen.GNNs_Models_a.GNN2_model.training == False
-            assert self.Module_Gen.GNNs_Models_a.GNN3_1_model.training == False
-            assert self.Module_Gen.GNNs_Models_a.GNN3_2_model.training == False
-            
+                assert self.Module_Gen.GNNs_Models_q.GNN1_model.training == False
+                assert self.Module_Gen.GNNs_Models_q.GNN2_model.training == False
+                assert self.Module_Gen.GNNs_Models_q.GNN3_1_model.training == False
+                assert self.Module_Gen.GNNs_Models_q.GNN3_2_model.training == False
+                assert self.Module_Gen.GNNs_Models_pi.GNN1_model.training == False
+                assert self.Module_Gen.GNNs_Models_pi.GNN2_model.training == False
+                assert self.Module_Gen.GNNs_Models_pi.GNN3_1_model.training == False
+                assert self.Module_Gen.GNNs_Models_pi.GNN3_2_model.training == False
+                assert self.Module_Gen.GNNs_Models_a.GNN1_model.training == False
+                assert self.Module_Gen.GNNs_Models_a.GNN2_model.training == False
+                assert self.Module_Gen.GNNs_Models_a.GNN3_1_model.training == False
+                assert self.Module_Gen.GNNs_Models_a.GNN3_2_model.training == False
+                
 
-            P_over_q.append(torch.flatten(a_value * exponents / q_value))
-            P_over_pi.append(torch.flatten(a_value * exponents / pi_value))
-            pi_over_q.append(torch.flatten(pi_value / q_value))
+                P_over_q.append(torch.flatten(a_value * exponents / q_value))
+                P_over_pi.append(torch.flatten(a_value * exponents / pi_value))
+                pi_over_q.append(torch.flatten(pi_value / q_value))
 
-            # Compute the loss to train the model
-            loss = - torch.sum(a_value*exponents / q_value * torch.log(pi_value))
-            total_loss += loss.item()   
+                all_features_values_total.append(all_features_values)
 
-            # Backward pass and optimizer steps are performed after each mini-batch
-            loss.backward()
+                # Compute the loss to train the model
+                loss = - torch.sum(a_value*exponents / q_value * torch.log(pi_value))
+                total_loss += loss.item()   
+
+                # Backward pass and optimizer steps are performed after each mini-batch
+                loss.backward()
+                self.Module_Gen.clean_memory()
+
             self.optimizer_1.step()
             self.optimizer_2.step()
             self.optimizer_3_1.step()
             self.optimizer_3_2.step()
-
-            self.Module_Gen.clean_memory()
-
-            """
-            # Delete everything that is not needed anymore
-            loss.cpu().detach()
-            q_value.cpu().detach()
-            a_value.cpu().detach()
-            pi_value.cpu().detach()
-            exponents.cpu().detach()
-            del loss, q_value, a_value, pi_value, exponents
-
-            torch.cuda.empty_cache()
-
-            # Garbage collection
-            gc.collect()
-            """
         
-            
-        mean_loss = total_loss / (num_mini_batches * self.minibatch_size)
+        K = (num_batches * num_mini_batches * self.minibatch_size)     
+        mean_loss = total_loss / K
 
 
         P_over_q = torch.flatten(torch.stack(P_over_q))
         P_over_pi = torch.flatten(torch.stack(P_over_pi))
         pi_over_q = torch.flatten(torch.stack(pi_over_q))
+
+        all_features_values_total = torch.stack(all_features_values_total)
 
         ### now we compare the KL divergence betweend p and pi and p and q to perhaps replacce q 
         was_q_updated = False
@@ -253,27 +244,33 @@ class GDCTrainer_path():
 
         print('sum P_over_q : ', torch.sum(P_over_q))
 
-        print('mean P_over_q : ', torch.sum(P_over_q)/(num_mini_batches * self.minibatch_size))
+        print('mean P_over_q : ', torch.sum(P_over_q)/K)
 
         z_hat_i_std = torch.std(P_over_q)
         print('z_hat_i : ', z_hat_i)
         print('i' , self.iter)
         self.Z_moving_average = (self.iter*self.Z_moving_average + z_hat_i)/(self.iter+1)
 
-        tvd_p_pi = 0.5 * torch.sum(torch.abs(pi_over_q -P_over_q/ self.Z_moving_average))/(num_mini_batches * self.minibatch_size)
-        tvd_p_q = 0.5 * torch.sum(torch.abs(1-P_over_q/ self.Z_moving_average))/(num_mini_batches * self.minibatch_size)
+        tvd_p_pi = 0.5 * torch.sum(torch.abs(pi_over_q -P_over_q/ self.Z_moving_average))/K
+        tvd_p_q = 0.5 * torch.sum(torch.abs(1-P_over_q/ self.Z_moving_average))/K
 
         print('self.Z_moving_average : ', self.Z_moving_average)
         print('P_over_q : ', P_over_q)
         print('P_over_pi : ', P_over_pi)
-        dkl_p_pi = -torch.log(self.Z_moving_average) + torch.sum((P_over_q * torch.log(P_over_pi)))/(num_mini_batches * self.minibatch_size * self.Z_moving_average)
-        dkl_p_q = -torch.log(self.Z_moving_average) + torch.sum((P_over_q * torch.log(P_over_q)))/(num_mini_batches * self.minibatch_size * self.Z_moving_average)
+        dkl_p_pi = -torch.log(self.Z_moving_average) + torch.sum((P_over_q * torch.log(P_over_pi)))/(K * self.Z_moving_average)
+        dkl_p_q = -torch.log(self.Z_moving_average) + torch.sum((P_over_q * torch.log(P_over_q)))/(K * self.Z_moving_average)
         
         print('dkl_p_pi: ', dkl_p_pi)
         print('dkl_p_q: ', dkl_p_q)
         
         print('tvd_p_pi: ', tvd_p_pi)
         print('tvd_p_q: ', tvd_p_q)
+
+        print('logP mean: ', torch.mean(all_features_values_total[:,0]))
+        print('logP std: ', torch.std(all_features_values_total[:,0]))
+
+        print('QED mean: ', torch.mean(all_features_values_total[:,1]))
+        print('QED std: ', torch.std(all_features_values_total[:,1]))
 
         if self.q_update_criterion in ['kld', 'tvd']:
             if self.q_update_criterion == 'kld':
