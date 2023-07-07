@@ -238,7 +238,7 @@ class GDCTrainer_path():
             """
         
             
-        mean_loss = total_loss / (num_batches * num_mini_batches * self.minibatch_size)
+        mean_loss = total_loss / (num_mini_batches * self.minibatch_size)
 
 
         P_over_q = torch.flatten(torch.stack(P_over_q))
@@ -249,13 +249,18 @@ class GDCTrainer_path():
         was_q_updated = False
         z_hat_i = torch.mean(P_over_q)
         z_hat_i_std = torch.std(P_over_q)
+        print('z_hat_i : ', z_hat_i)
+        print('i' , self.iter)
         self.Z_moving_average = (self.iter*self.Z_moving_average + z_hat_i)/(self.iter+1)
 
-        tvd_p_pi = 0.5 * torch.sum(torch.abs(pi_over_q -P_over_q/ self.Z_moving_average))/(num_batches * num_mini_batches * self.minibatch_size)
-        tvd_p_q = 0.5 * torch.sum(torch.abs(1-P_over_q/ self.Z_moving_average))/(num_batches * num_mini_batches * self.minibatch_size)
+        tvd_p_pi = 0.5 * torch.sum(torch.abs(pi_over_q -P_over_q/ self.Z_moving_average))/(num_mini_batches * self.minibatch_size)
+        tvd_p_q = 0.5 * torch.sum(torch.abs(1-P_over_q/ self.Z_moving_average))/(num_mini_batches * self.minibatch_size)
 
-        dkl_p_pi = -torch.log(self.Z_moving_average) + torch.sum((P_over_q * torch.log(P_over_pi)))/(num_batches * num_mini_batches * self.minibatch_size * self.Z_moving_average)
-        dkl_p_q = -torch.log(self.Z_moving_average) + torch.sum((P_over_q * torch.log(P_over_q)))/(num_batches * num_mini_batches * self.minibatch_size * self.Z_moving_average)
+        print('self.Z_moving_average : ', self.Z_moving_average)
+        print('P_over_q : ', P_over_q)
+        print('P_over_pi : ', P_over_pi)
+        dkl_p_pi = -torch.log(self.Z_moving_average) + torch.sum((P_over_q * torch.log(P_over_pi)))/(num_mini_batches * self.minibatch_size * self.Z_moving_average)
+        dkl_p_q = -torch.log(self.Z_moving_average) + torch.sum((P_over_q * torch.log(P_over_q)))/(num_mini_batches * self.minibatch_size * self.Z_moving_average)
         
         print('dkl_p_pi: ', dkl_p_pi)
         print('dkl_p_q: ', dkl_p_q)
