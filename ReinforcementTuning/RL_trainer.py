@@ -310,14 +310,23 @@ class GDCTrainer_path():
         train_stats['q_updated?'] = was_q_updated
         self.iter += 1
         return train_stats
-    def run_steps(self, num_steps, num_batches, num_mini_batches):
+    def run_steps(self, num_steps, num_batches, num_mini_batches, exp_name):
             self.Module_Gen.batch_size = self.minibatch_size
             train_history = []
-            for _ in range(num_steps):
+            for l in range(num_steps):
                 gc.collect()
                 torch.cuda.empty_cache()
                 train_stats = self.step(num_batches, num_mini_batches)
                 train_history.append(train_stats)
+                # Save state_dict of the model every 10 steps
+                if l % 10 == 0:
+                    # Create the folder exp_name if it does not exist
+                    if not os.path.exists(exp_name):
+                        os.makedirs(exp_name)
+                    
+                    state_dict = self.Module_Gen.GNNs_Models_q.get_state_dict()
+                    torch.save(state_dict, exp_name + '/best_rl_model.pt')
 
 
             return train_history
+    
