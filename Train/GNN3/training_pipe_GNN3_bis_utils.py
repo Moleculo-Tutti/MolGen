@@ -33,7 +33,7 @@ sys.path.append(parent_dir)
 sys.path.append(parent_parent_dir)
 
 from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_GNN3_bis
-from Model.GNN3 import  ModelWithgraph_embedding_modif, ModelWithgraph_embedding_close_or_not_with_node_embedding, ModelWithgraph_embedding_close_or_not_without_node_embedding
+from Model.GNN3 import  ModelWithgraph_embedding_modif, ModelWithgraph_embedding_close_or_not_with_node_embedding, ModelWithgraph_embedding_close_or_not_without_node_embedding, ModelWithgraph_embedding_modif_gcnconv, ModelWithgraph_embedding_close_or_not_gcnconv
 from Model.metrics import  metric_gnn3_bis_graph_level, metric_gnn3_bis_if_cycle, metric_gnn3_bis_if_cycle_actualized
 
 
@@ -328,6 +328,7 @@ class TrainGNN3_bis():
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.split_two_parts = config['split_two_parts']
         self.node_embedding_for_second_part = config['node_embedding_for_second_part']
+        self.use_gcnconv = config['use_gcnconv']
         print(f"Training on {self.device}")
         self.continue_training = continue_training
 
@@ -400,7 +401,8 @@ class TrainGNN3_bis():
                                         max_size=self.max_size,
                                         encoding_size=encoding_size)
         else :
-            model_graph =ModelWithgraph_embedding_close_or_not_without_node_embedding(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
+            if self.use_gcnconv:
+                model_graph = ModelWithgraph_embedding_close_or_not_gcnconv(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
                                         hidden_channels_list=self.GCN_size,
                                         mlp_hidden_channels=self.mlp_hidden,
                                         edge_channels=edge_size,
@@ -409,8 +411,27 @@ class TrainGNN3_bis():
                                         size_info=self.size_info,
                                         max_size=self.max_size,
                                         encoding_size=encoding_size)
-            
-        model_node = ModelWithgraph_embedding_modif(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
+            else:
+                model_graph =ModelWithgraph_embedding_close_or_not_without_node_embedding(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
+                                        hidden_channels_list=self.GCN_size,
+                                        mlp_hidden_channels=self.mlp_hidden,
+                                        edge_channels=edge_size,
+                                        num_classes=1, #0 if we want to close nothing and 1 if  we close one cycle in the graph
+                                        use_dropout=self.use_dropout,
+                                        size_info=self.size_info,
+                                        max_size=self.max_size,
+                                        encoding_size=encoding_size)
+        if self.use_gcnconv:
+            model_node = ModelWithgraph_embedding_modif_gcnconv(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
+                                        hidden_channels_list=self.GCN_size,
+                                        mlp_hidden_channels=self.mlp_hidden,
+                                        edge_channels=edge_size, 
+                                        num_classes=edge_size -1, #close with a simple double and which one to close just size 2
+                                        use_dropout=self.use_dropout,
+                                        size_info=self.size_info,
+                                        max_size=self.max_size)
+        else: 
+            model_node = ModelWithgraph_embedding_modif(in_channels = encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
                                         hidden_channels_list=self.GCN_size,
                                         mlp_hidden_channels=self.mlp_hidden,
                                         edge_channels=edge_size, 

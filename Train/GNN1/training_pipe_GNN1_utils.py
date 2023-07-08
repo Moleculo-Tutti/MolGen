@@ -31,7 +31,7 @@ sys.path.append(parent_dir)
 sys.path.append(parent_parent_dir)
 
 from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_GNN1
-from Model.GNN1 import ModelWithEdgeFeatures, ModelWithNodeConcat
+from Model.GNN1 import ModelWithEdgeFeatures, ModelWithNodeConcat, ModelWithEdgeFeatures_conv
 from Model.metrics import pseudo_accuracy_metric, pseudo_recall_for_each_class, pseudo_precision_for_each_class
 
 
@@ -196,6 +196,7 @@ class TrainGNN1():
         self.score_list = config['score_list']
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.continue_training = continue_training
+        self.use_gcnconv = config['use_gcnconv']
         print(f"Training on {self.device}")
 
         print(f"Loading data...")
@@ -245,8 +246,19 @@ class TrainGNN1():
                                       num_classes=encoding_size,
                                       max_size=self.max_size)
         else :
-            # Load the model
-            model = ModelWithEdgeFeatures(in_channels=encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
+
+            if self.use_gcnconv :
+                model = ModelWithEdgeFeatures_conv(in_channels=encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
+                                        hidden_channels_list=self.GCN_size,
+                                        mlp_hidden_channels=self.mlp_hidden,
+                                        edge_channels=edge_size,
+                                        use_dropout=self.use_dropout,
+                                        size_info=self.use_size,
+                                        num_classes=encoding_size,
+                                        max_size=self.max_size)
+            else :
+                # use our original model which is more a convolutional on edges
+                model = ModelWithEdgeFeatures(in_channels=encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
                                       hidden_channels_list=self.GCN_size, 
                                       mlp_hidden_channels=self.mlp_hidden, 
                                       edge_channels=edge_size, 

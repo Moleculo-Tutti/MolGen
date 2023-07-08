@@ -1,5 +1,5 @@
 {
-    "name": "GNN1_charged_baseline_debiased",
+    "name": "GNN1_charged_baseline_withgcnconv",
     "datapath_train": "../../DataPipeline/data/preprocessed_graph_train_charged_kekulized_scores.pt",
     "datapath_val": "../../DataPipeline/data/preprocessed_graph_val_charged_kekulized_scores.pt",
     "GCN_size": [64, 128, 256, 512, 512],
@@ -10,6 +10,7 @@
     "feature_position": true,
     "use_dropout": false,
     "node_embeddings": false,
+    "use_gcnconv" : true,
     "lr": 0.0001,
     "print_bar": false,
     "every_epoch_save" : 50,

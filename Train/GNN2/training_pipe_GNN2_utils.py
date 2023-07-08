@@ -33,7 +33,7 @@ sys.path.append(parent_dir)
 sys.path.append(parent_parent_dir)
 
 from DataPipeline.dataset import ZincSubgraphDatasetStep, custom_collate_passive_add_feature_GNN2, custom_collate_GNN2
-from Model.GNN2 import ModelWithEdgeFeatures, ModelWithNodeConcat
+from Model.GNN2 import ModelWithEdgeFeatures, ModelWithNodeConcat, ModelWithEdgeFeatures_conv
 from Model.metrics import pseudo_accuracy_metric, pseudo_recall_for_each_class, pseudo_precision_for_each_class
 
 def train_one_epoch(loader, model, size_edge, device, optimizer, criterion, epoch_metric, print_bar = False):
@@ -197,6 +197,8 @@ class TrainGNN2():
         self.score_list = config['score_list']
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.continue_training = continuue_training
+        self.use_gcnconv = config['use_gcnconv']
+
 
         print(f"Training on {self.device}")
 
@@ -242,8 +244,17 @@ class TrainGNN2():
 
         
         else :
-        # Load the model
-            model = ModelWithEdgeFeatures(in_channels=encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
+            if self.use_gcnconv :
+                model = ModelWithEdgeFeatures_conv(in_channels=encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
+                                        hidden_channels_list=self.GCN_size, 
+                                        mlp_hidden_channels=self.mlp_hidden, 
+                                        edge_channels=edge_size, 
+                                        use_dropout=self.use_dropout,
+                                        num_classes=edge_size,
+                                        size_info=self.use_size,
+                                            max_size=self.max_size)
+            else : 
+                model = ModelWithEdgeFeatures(in_channels=encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
                                       hidden_channels_list=self.GCN_size, 
                                       mlp_hidden_channels=self.mlp_hidden, 
                                       edge_channels=edge_size, 
