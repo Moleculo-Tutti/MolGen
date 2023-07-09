@@ -218,15 +218,9 @@ class ModelWithEdgeFeatures_conv(torch.nn.Module):
             x_triple_bound = F.relu(x_triple_bound)
             x_identity = F.relu(x_identity)
 
-            print(x_simple_bound.shape)
-
-            x = x_simple_bound + x_double_bound + x_triple_bound + x_identity
-            print(x.shape)
-            print(torch.sum(torch.stack([x_simple_bound, x_double_bound, x_triple_bound, x_identity], dim=1), dim=1).shape)
-            print(x == torch.sum(torch.stack([x_simple_bound, x_double_bound, x_triple_bound, x_identity], dim=1), dim=1))
-            quit()
-            #alternative a verifier 
-            # x = torch.sum(torch.stack([x_simple_bound, x_double_bound, x_triple_bound, x_identity], dim=1), dim=1)
+            x = torch.sum(torch.stack([x_simple_bound, x_double_bound, x_triple_bound, x_identity], dim=1), dim=1)
+            #alternative bonne laquellle plus rapide ? 
+            # x = x_simple_bound + x_double_bound + x_triple_bound + x_identity
 
             if self.use_batchnorm:
                 x = batch_norm_layer(x)

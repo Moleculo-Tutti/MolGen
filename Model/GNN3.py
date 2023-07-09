@@ -340,7 +340,7 @@ class ModelWithgraph_embedding_close_or_not_gcnconv(torch.nn.Module):
             x_triple_bound = F.relu(x_triple_bound)
             x_identity = F.relu(x_identity)
 
-            x = torch.sum((x_simple_bound, x_double_bound, x_triple_bound, x_identity), dim=1)
+            x = torch.sum(torch.stack([x_simple_bound, x_double_bound, x_triple_bound, x_identity], dim=1), dim=1)
             if self.use_batchnorm:
                 x = batch_norm_layer(x)
             x = F.relu(x)
@@ -427,7 +427,7 @@ class ModelWithgraph_embedding_modif_gcnconv(torch.nn.Module):
             x_triple_bound = F.relu(x_triple_bound)
             x_identity = F.relu(x_identity)
 
-            x = torch.sum((x_simple_bound, x_double_bound, x_triple_bound, x_identity), dim=1)
+            x = torch.sum(torch.stack([x_simple_bound, x_double_bound, x_triple_bound, x_identity], dim=1), dim=1)
             if self.use_batchnorm:
                 x = batch_norm_layer(x)
             x = F.relu(x)
