@@ -53,13 +53,14 @@ def add_node_feature_based_on_position(data):
 
 class ZincSubgraphDatasetStep(Dataset):
 
-    def __init__(self, data_path, GNN_type : str, feature_position : bool = False, scores_list : list = []):
+    def __init__(self, data_path, GNN_type : str, feature_position : bool = False, scores_list : list = [], size_minimum_scaffold : int = 1):
         self.data_list = torch.load(data_path)
         self.encoding_size = self.data_list[0].x.size(1)
         self.edge_size = self.data_list[0].edge_attr.size(1)
         self.GNN_type = GNN_type
         self.feature_position = feature_position
         self.scores_list = scores_list
+        self.size_minimum_scaffold = size_minimum_scaffold
         if GNN_type >= 2:
             self.impose_edges = True
         else:
@@ -77,9 +78,9 @@ class ZincSubgraphDatasetStep(Dataset):
    
         mol_size = len(preprocessed_graph.x)
         if self.GNN_type == 1:
-            num_steps = random.choice(range(1, 2*mol_size))
+            num_steps = random.choice(range(self.size_minimum_scaffold, 2*mol_size))
         if self.GNN_type >= 2:
-            num_steps = random.choice(range(1, mol_size))
+            num_steps = random.choice(range(self.size_minimum_scaffold, mol_size))
         subgraph, terminal_nodes, id_map = get_subgraph_with_terminal_nodes_step(preprocessed_graph, num_steps, impose_edges=self.impose_edges)
 
         if self.GNN_type == 1:
