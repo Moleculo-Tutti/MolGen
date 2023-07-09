@@ -5,6 +5,7 @@
     "n_epochs": 10000,
     "GCN_size": [64, 128, 256, 256, 512, 512],
     "mlp_hidden": 256,
+    "size_minimum_scaffold" : 2,
     "feature_position" : true,
     "graph_embedding": true,
     "batch_size": 512,

@@ -331,6 +331,7 @@ class TrainGNN3_bis():
         self.use_gcnconv = config['use_gcnconv']
         print(f"Training on {self.device}")
         self.continue_training = continue_training
+        self.size_minimum_scaffold = config['size_minimum_scaffold']
 
         print(f"Loading data...")
         self.loader_train, self.loader_val, self.model_node, self.encoding_size, self.edge_size,self.model_graph = self.load_data_model()
@@ -378,8 +379,8 @@ class TrainGNN3_bis():
     def load_data_model(self):
         # Load the data
         
-        dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=4, feature_position=self.feature_position, scores_list=self.score_list)
-        dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=4, feature_position=self.feature_position, scores_list=self.score_list)
+        dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=4, feature_position=self.feature_position, scores_list=self.score_list, size_minimum_scaffold=self.size_minimum_scaffold)
+        dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=4, feature_position=self.feature_position, scores_list=self.score_list, size_minimum_scaffold=self.size_minimum_scaffold)
 
         loader_train = DataLoader(dataset_train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers, collate_fn=custom_collate_GNN3_bis)
         loader_val = DataLoader(dataset_val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers, collate_fn=custom_collate_GNN3_bis)

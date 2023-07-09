@@ -198,6 +198,7 @@ class TrainGNN2():
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.continue_training = continuue_training
         self.use_gcnconv = config['use_gcnconv']
+        self.size_minimum_scaffold = config['size_minimum_scaffold']
 
 
         print(f"Training on {self.device}")
@@ -224,8 +225,8 @@ class TrainGNN2():
 
     def load_data_model(self):
         # Load the data
-        dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=2, feature_position=self.feature_position, scores_list=self.score_list)
-        dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=2, feature_position=self.feature_position, scores_list=self.score_list)
+        dataset_train = ZincSubgraphDatasetStep(self.datapath_train, GNN_type=2, feature_position=self.feature_position, scores_list=self.score_list, size_minimum_scaffold=self.size_minimum_scaffold)
+        dataset_val = ZincSubgraphDatasetStep(self.datapath_val, GNN_type=2, feature_position=self.feature_position, scores_list=self.score_list, size_minimum_scaffold=self.size_minimum_scaffold)
         
         loader_train = DataLoader(dataset_train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers, collate_fn=custom_collate_GNN2)
         loader_val = DataLoader(dataset_val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers, collate_fn=custom_collate_GNN2)

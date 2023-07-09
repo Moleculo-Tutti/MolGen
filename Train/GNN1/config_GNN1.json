@@ -7,6 +7,7 @@
     "mlp_hidden": 512,
     "batch_size": 128,
     "use_size": true,
+    "size_minimum_scaffold" : 2,
     "feature_position": true,
     "use_dropout": false,
     "node_embeddings": false,

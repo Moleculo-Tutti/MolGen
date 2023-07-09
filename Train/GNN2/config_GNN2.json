@@ -6,6 +6,7 @@
     "n_epochs": 3000,
     "mlp_hidden": 512,
     "batch_size": 128,
+    "size_minimum_scaffold" : 2,
     "use_size": true,
     "feature_position": true,
     "use_dropout": false,
