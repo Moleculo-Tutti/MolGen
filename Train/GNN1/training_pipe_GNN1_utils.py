@@ -236,6 +236,7 @@ class TrainGNN1():
         edge_size = dataset_train.edge_size
 
         if self.node_embeddings:
+            print( "GNN1 : edge_convolutionnal and concat multpile node embeddings")
             model = ModelWithNodeConcat(in_channels=encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
                                       hidden_channels_list=self.GCN_size, 
                                       mlp_hidden_channels=self.mlp_hidden, 
@@ -248,6 +249,7 @@ class TrainGNN1():
         else :
 
             if self.use_gcnconv :
+                print( "GNN1 : node_convolutionnal")
                 model = ModelWithEdgeFeatures_conv(in_channels=encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
                                         hidden_channels_list=self.GCN_size,
                                         mlp_hidden_channels=self.mlp_hidden,
@@ -257,6 +259,7 @@ class TrainGNN1():
                                         num_classes=encoding_size,
                                         max_size=self.max_size)
             else :
+                print( "GNN1 : edge_convolutionnal")
                 # use our original model which is more a convolutional on edges
                 model = ModelWithEdgeFeatures(in_channels=encoding_size + int(self.feature_position) + int(len(self.score_list)), # We increase the input size to take into account the feature position
                                       hidden_channels_list=self.GCN_size, 
